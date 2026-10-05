@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #059669;
+  --color-bg-base: #f8fafc;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg-base);
+    color: #334155;
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-y: scroll;
+  }
+  
+  ::selection {
+    background-color: #a7f3d0;
+    color: #064e3b;
+  }
+}
