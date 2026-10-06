@@ -41,6 +41,8 @@ onMounted(async () => {
 
 const form = reactive({
   namaLengkap: '',
+  tempatLahir: '',
+  tanggalLahir: '',
   jenisKelamin: '',
   whatsapp: '',
   namaOrtu: '',
@@ -68,6 +70,8 @@ const submitForm = async () => {
 
     const payload = {
       fullName: form.namaLengkap,
+      birthPlace: form.tempatLahir,
+      birthDate: form.tanggalLahir,
       gender: form.jenisKelamin === 'L' ? 'MALE' : 'FEMALE',
       whatsapp: form.whatsapp,
       parentName: form.namaOrtu,
@@ -139,21 +143,46 @@ const goBack = () => {
         <h3 class="formTitle">Form Pendaftaran</h3>
 
         <form @submit.prevent="submitForm" class="form">
+          <div class="inputGroup">
+            <label for="namaLengkap" class="label">Nama Lengkap <span class="text-red-500">*</span></label>
+            <input
+              type="text"
+              id="namaLengkap"
+              v-model="form.namaLengkap"
+              required
+              class="input"
+              placeholder="Masukkan nama lengkap"
+            />
+          </div>
+
           <div class="formRow">
             <div class="inputGroup">
-              <label for="namaLengkap" class="label">Nama Lengkap</label>
+              <label for="tempatLahir" class="label">Tempat Lahir <span class="text-red-500">*</span></label>
               <input
                 type="text"
-                id="namaLengkap"
-                v-model="form.namaLengkap"
+                id="tempatLahir"
+                v-model="form.tempatLahir"
                 required
                 class="input"
-                placeholder="Masukkan nama lengkap"
+                placeholder="Masukkan kota tempat lahir"
               />
             </div>
 
             <div class="inputGroup">
-              <label for="jenisKelamin" class="label">Jenis Kelamin</label>
+              <label for="tanggalLahir" class="label">Tanggal Lahir <span class="text-red-500">*</span></label>
+              <input
+                type="date"
+                id="tanggalLahir"
+                v-model="form.tanggalLahir"
+                required
+                class="input"
+              />
+            </div>
+          </div>
+
+          <div class="formRow">
+            <div class="inputGroup">
+              <label for="jenisKelamin" class="label">Jenis Kelamin <span class="text-red-500">*</span></label>
               <select
                 id="jenisKelamin"
                 v-model="form.jenisKelamin"
@@ -165,12 +194,10 @@ const goBack = () => {
                 <option value="P">Perempuan</option>
               </select>
             </div>
-          </div>
-
-          <div class="formRow">
+            
             <div class="inputGroup">
               <label for="whatsapp" class="label">
-                No. WhatsApp <span class="highlight">*gunakan nomor ortu jika ada</span>
+                No. WhatsApp <span class="text-red-500">*</span>
               </label>
               <input
                 type="tel"
@@ -181,22 +208,22 @@ const goBack = () => {
                 placeholder="08xxxxxxxxxx"
               />
             </div>
-
-            <div class="inputGroup">
-              <label for="namaOrtu" class="label">Nama Orang Tua/Wali</label>
-              <input
-                type="text"
-                id="namaOrtu"
-                v-model="form.namaOrtu"
-                required
-                class="input"
-                placeholder="Nama Ayah/Ibu"
-              />
-            </div>
           </div>
 
           <div class="inputGroup">
-            <label for="alamat" class="label">Alamat Lengkap</label>
+            <label for="namaOrtu" class="label">Nama Orang Tua/Wali <span class="text-red-500">*</span></label>
+            <input
+              type="text"
+              id="namaOrtu"
+              v-model="form.namaOrtu"
+              required
+              class="input"
+              placeholder="Nama Ayah/Ibu"
+            />
+          </div>
+
+          <div class="inputGroup">
+            <label for="alamat" class="label">Alamat Lengkap <span class="text-red-500">*</span></label>
             <textarea
               id="alamat"
               v-model="form.alamat"
@@ -208,20 +235,19 @@ const goBack = () => {
           </div>
 
           <div class="inputGroup">
-            <label for="sekolahAsal" class="label">
-              Sekolah Asal <span class="highlight">(opsional)</span>
-            </label>
+            <label for="sekolahAsal" class="label">Sekolah Asal <span class="text-red-500">*</span></label>
             <input
               type="text"
               id="sekolahAsal"
               v-model="form.sekolahAsal"
+              required
               class="input"
-              placeholder="Nama sekolah asal (jika ada)"
+              placeholder="Nama sekolah asal"
             />
           </div>
 
           <div class="inputGroup">
-            <label for="lembaga" class="label">Lembaga Pendidikan yang dipilih</label>
+            <label for="lembaga" class="label">Lembaga Pendidikan yang dipilih <span class="text-red-500">*</span></label>
             <select
               id="lembaga"
               v-model="form.lembaga"
@@ -236,7 +262,7 @@ const goBack = () => {
           </div>
 
           <div class="inputGroup">
-            <label for="sumberInfo" class="label">Dari mana Anda mengetahui SPSMB Asy-Syadzili? <span class="highlight">*</span></label>
+            <label for="sumberInfo" class="label">Dari mana Anda mengetahui SPSMB Asy-Syadzili? <span class="text-red-500">*</span></label>
             <select
               id="sumberInfo"
               v-model="form.sumberInfo"
@@ -251,7 +277,7 @@ const goBack = () => {
           </div>
 
           <div class="inputGroup" v-if="sumberInfoOptions.find(o => o.value === form.sumberInfo)?.label.toLowerCase() === 'lainnya'">
-            <label for="sumberInfoLainnya" class="label">Sumber Informasi Lainnya</label>
+            <label for="sumberInfoLainnya" class="label">Sumber Informasi Lainnya <span class="text-red-500">*</span></label>
             <input
               type="text"
               id="sumberInfoLainnya"
