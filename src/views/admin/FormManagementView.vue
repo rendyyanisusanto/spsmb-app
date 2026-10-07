@@ -4,6 +4,7 @@ import { useAuth } from '@/composables/useAuth'
 import { getTargets, getSections, getFields, createSection, updateSection, deleteSection, createField, updateField, deleteField, updateFieldStatus, updateFieldRequired, updateFieldOrder } from '@/services/formService'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseErrorState from '@/components/ui/BaseErrorState.vue'
+import FormPreviewModal from '@/components/admin/FormPreviewModal.vue'
 
 const { user, hasRole } = useAuth()
 const isSuperAdmin = computed(() => hasRole('SUPER_ADMIN'))
@@ -15,6 +16,7 @@ const targets = ref([])
 const sectionsList = ref([])
 const fields = ref([])
 const selectedTargetId = ref(null)
+const isPreviewModalOpen = ref(false)
 
 const activeTarget = computed(() => targets.value.find(t => t.id === selectedTargetId.value))
 
@@ -287,13 +289,19 @@ const onWrapperClick = (e) => {
         <p class="text-slate-500 m-0">Atur field dan struktur formulir pendaftaran SPSMB.</p>
       </div>
       
-      <div class="w-full sm:w-80">
-        <select 
-          v-model="selectedTargetId"
-          class="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 shadow-sm font-semibold text-slate-700"
-        >
-          <option v-for="t in targets" :key="t.id" :value="t.id">Target Form: {{ t.name }}</option>
-        </select>
+      <div class="flex items-center gap-3 w-full sm:w-auto flex-col sm:flex-row">
+        <button @click="isPreviewModalOpen = true" class="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-sm transition-colors border border-slate-300 shadow-sm flex items-center justify-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          Preview Form
+        </button>
+        <div class="w-full sm:w-64">
+          <select 
+            v-model="selectedTargetId"
+            class="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 shadow-sm font-semibold text-slate-700"
+          >
+            <option v-for="t in targets" :key="t.id" :value="t.id">Target Form: {{ t.name }}</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -520,6 +528,14 @@ const onWrapperClick = (e) => {
       </div>
       
     </div>
+    
+    <FormPreviewModal 
+      :open="isPreviewModalOpen" 
+      @close="isPreviewModalOpen = false" 
+      :targets="targets" 
+      :sections="sectionsList" 
+      :fields="fields" 
+    />
   </div>
 </template>
 

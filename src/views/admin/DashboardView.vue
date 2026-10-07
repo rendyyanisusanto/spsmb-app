@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
-import { fetchDashboardDataMock } from '@/data/mock/dashboard'
+import { getDashboardStats } from '@/services/dashboardService'
 import StatsCard from '@/components/admin/StatsCard.vue'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseEmptyState from '@/components/ui/BaseEmptyState.vue'
@@ -24,11 +24,10 @@ const loadData = async () => {
   loading.value = true
   error.value = ''
   try {
-    const institutionName = user.value?.institutions?.[0]?.name
-    const res = await fetchDashboardDataMock(user.value?.primaryRole, institutionName)
-    if (res.success) {
-      stats.value = res.stats
-      recentPendaftar.value = res.recent
+    const res = await getDashboardStats()
+    if (res && res.data) {
+      stats.value = res.data
+      recentPendaftar.value = res.data.recent
     } else {
       error.value = 'Gagal memuat data dashboard'
     }
