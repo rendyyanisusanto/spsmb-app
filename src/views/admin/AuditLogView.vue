@@ -1,7 +1,7 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
-import { getAuditLogsMock } from '@/data/mock/auditLogs'
+import { getAuditLogs } from '@/services/auditLogService'
 import { exportToExcel } from '@/utils/exportExcel'
 
 const { user } = useAuth()
@@ -13,13 +13,57 @@ const loading = ref(false)
 const exporting = ref(false)
 const allLogs = ref([])
 
-onMounted(async () => {
+const meta = ref({
+  page: 1,
+  limit: 25,
+  total: 0,
+  totalPages: 1
+})
+
+const fetchLogs = async () => {
   loading.value = true
-  const res = await getAuditLogsMock()
-  if (res.success) {
-    allLogs.value = res.data
+  try {
+    const params = {
+      page: currentPage.value,
+      limit: perPage.value,
+      action: filterAction.value,
+      entityType: filterModule.value,
+      search: search.value
+    }
+    
+    if (filterDateType.value === 'TODAY') {
+      const today = new Date().toISOString().split('T')[0]
+      params.dateFrom = today
+      params.dateTo = today
+    } else if (filterDateType.value === 'LAST_7') {
+      const d = new Date()
+      d.setDate(d.getDate() - 7)
+      params.dateFrom = d.toISOString().split('T')[0]
+      params.dateTo = new Date().toISOString().split('T')[0]
+    } else if (filterDateType.value === 'CUSTOM') {
+      if (customDateStart.value) params.dateFrom = customDateStart.value
+      if (customDateEnd.value) params.dateTo = customDateEnd.value
+    }
+
+    // Notice we do not pass institution because scope is handled strictly in backend based on Auth token
+
+    const res = await getAuditLogs(params)
+    if (res.success) {
+      allLogs.value = res.data
+      if (res.meta) {
+        meta.value = res.meta
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load audit logs:', error)
+    // Optional: show toast/notification here
+  } finally {
+    loading.value = false
   }
-  loading.value = false
+}
+
+onMounted(() => {
+  fetchLogs()
 })
 
 // Constants for UI
@@ -86,68 +130,30 @@ const filterDateType = ref('ALL')
 const customDateStart = ref('')
 const customDateEnd = ref('')
 
-// Computed Filtered Logs
-const filteredLogs = computed(() => {
-  let result = allLogs.value
+// We replace computed filteredLogs with allLogs directly from the backend
+const filteredLogs = computed(() => allLogs.value)
 
-  // Security Scope Filter
-  if (!isSuperAdmin.value) {
-    result = result.filter(log => log.institutionName === adminInstitution.value)
-  } else if (isSuperAdmin.value && filterInstitution.value !== 'ALL') {
-    if (filterInstitution.value === 'Global') {
-      result = result.filter(log => !log.institutionName || log.institutionName === 'Global')
-    } else {
-      result = result.filter(log => log.institutionName === filterInstitution.value)
-    }
-  }
-
-  // General Filters
-  if (filterModule.value !== 'ALL') result = result.filter(log => log.module === filterModule.value)
-  if (filterAction.value !== 'ALL') result = result.filter(log => log.action === filterAction.value)
-  if (filterRole.value !== 'ALL') result = result.filter(log => log.role === filterRole.value)
-  
-  if (search.value) {
-    const s = search.value.toLowerCase()
-    result = result.filter(log => 
-      (log.userName && log.userName.toLowerCase().includes(s)) ||
-      (log.description && log.description.toLowerCase().includes(s)) ||
-      (log.targetName && String(log.targetName).toLowerCase().includes(s)) ||
-      (log.targetId && String(log.targetId).toLowerCase().includes(s))
-    )
-  }
-  
-  const mockTodayStr = '2026-09-30'
-  if (filterDateType.value === 'TODAY') {
-    result = result.filter(log => log.createdAt.startsWith(mockTodayStr))
-  } else if (filterDateType.value === 'CUSTOM' && customDateStart.value && customDateEnd.value) {
-    const start = new Date(customDateStart.value)
-    const end = new Date(customDateEnd.value)
-    end.setHours(23, 59, 59, 999)
-    result = result.filter(log => {
-      const logDate = new Date(log.createdAt.split(' ')[0])
-      return logDate >= start && logDate <= end
-    })
-  }
-
-  return result
-})
-
-// Pagination
+// Pagination state from API
 const currentPage = ref(1)
 const perPage = ref(25)
 const perPageOptions = [10, 25, 50, 100]
-const totalItems = computed(() => filteredLogs.value.length)
-const totalPages = computed(() => Math.ceil(totalItems.value / perPage.value))
+const totalItems = computed(() => meta.value.total)
+const totalPages = computed(() => meta.value.totalPages)
 
-const paginatedLogs = computed(() => {
-  const start = (currentPage.value - 1) * perPage.value
-  const end = start + perPage.value
-  return filteredLogs.value.slice(start, end)
-})
+const paginatedLogs = computed(() => allLogs.value)
 
 import { watch } from 'vue'
+let debounceTimeout = null
 watch([search, filterModule, filterAction, filterRole, filterInstitution, filterDateType, customDateStart, customDateEnd, perPage], () => {
   currentPage.value = 1
+  if (debounceTimeout) clearTimeout(debounceTimeout)
+  debounceTimeout = setTimeout(() => {
+    fetchLogs()
+  }, 300)
+})
+
+watch(currentPage, () => {
+  fetchLogs()
 })
 
 // Modals
@@ -174,14 +180,14 @@ const handleExport = () => {
   
   const data = filteredLogs.value.map(log => ({
     'Waktu': log.createdAt,
-    'Admin': log.userName,
-    'Username': log.username,
-    'Role': log.role,
-    'Lembaga': log.institutionName,
+    'Admin': log.user_name || log.userName,
+    'Username': log.user_username || log.username,
+    'Role': '-',
+    'Lembaga': '-',
     'Aktivitas': getActionLabel(log.action),
-    'Module': getModuleLabel(log.module),
-    'Target Type': log.targetType,
-    'Target Name': log.targetName,
+    'Module': getModuleLabel(log.entityType),
+    'Target Type': log.entityType,
+    'Target Name': log.entityId,
     'Deskripsi': log.description
   }))
 
@@ -310,21 +316,18 @@ const handleExport = () => {
               </td>
               <td class="p-4">
                 <div class="font-bold text-slate-800 text-sm flex items-center gap-2">
-                  {{ log.userName }}
+                  {{ log.user_name || log.userName || 'Sistem / Publik' }}
                 </div>
                 <div class="flex items-center gap-2 mt-1">
-                  <span :class="['text-[9px] font-bold px-1.5 py-0.5 rounded uppercase', getRoleColor(log.role)]">
-                    {{ log.role === 'SUPER_ADMIN' ? 'SUPER' : 'LEMBAGA' }}
-                  </span>
-                  <span class="text-xs text-slate-500 truncate max-w-[120px]">{{ log.institutionName || 'Global' }}</span>
+                  <span class="text-xs text-slate-500 truncate max-w-[120px]">@{{ log.user_username || log.username || 'unknown' }}</span>
                 </div>
               </td>
               <td class="p-4">
                 <div class="font-bold text-slate-700 text-sm">{{ getActionLabel(log.action) }}</div>
-                <div class="text-xs text-slate-500 font-mono mt-0.5">{{ getModuleLabel(log.module) }}</div>
+                <div class="text-xs text-slate-500 font-mono mt-0.5">{{ getModuleLabel(log.entityType || log.module) }}</div>
               </td>
               <td class="p-4">
-                <div class="font-bold text-slate-700 text-sm truncate max-w-[250px]" :title="log.targetName">{{ log.targetName || '-' }}</div>
+                <div class="font-bold text-slate-700 text-sm truncate max-w-[250px]">{{ log.entityType || log.targetName || '-' }} {{ log.entityId ? `#${log.entityId}` : '' }}</div>
                 <div class="text-xs text-slate-500 mt-0.5 truncate max-w-[300px]" :title="log.description">{{ log.description }}</div>
               </td>
               <td class="p-4 text-right">
@@ -379,24 +382,24 @@ const handleExport = () => {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div>
               <div class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Administrator</div>
-              <div class="font-bold text-slate-800">{{ selectedLog.userName }} <span class="font-normal text-slate-500 font-mono">(@{{ selectedLog.username }})</span></div>
+              <div class="font-bold text-slate-800">{{ selectedLog.user_name || selectedLog.userName || 'Sistem / Publik' }} <span class="font-normal text-slate-500 font-mono">(@{{ selectedLog.user_username || selectedLog.username || 'unknown' }})</span></div>
               <div class="mt-1 flex items-center gap-2">
-                <span :class="['text-[10px] font-bold px-1.5 py-0.5 rounded uppercase', getRoleColor(selectedLog.role)]">{{ selectedLog.role }}</span>
-                <span class="text-slate-600 font-medium text-xs">{{ selectedLog.institutionName || 'Global' }}</span>
+                <span class="text-slate-600 font-medium text-xs">{{ selectedLog.ipAddress || '-' }}</span>
               </div>
             </div>
             <div>
               <div class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Aktivitas Sistem</div>
               <div class="font-bold text-slate-800">{{ getActionLabel(selectedLog.action) }}</div>
-              <div class="text-slate-600 font-mono text-xs mt-1">Modul: {{ getModuleLabel(selectedLog.module) }}</div>
-              <div class="text-slate-500 font-mono text-xs mt-1">{{ selectedLog.createdAt }}</div>
+              <div class="text-slate-600 font-mono text-xs mt-1">Modul: {{ getModuleLabel(selectedLog.entityType || selectedLog.module) }}</div>
+              <div class="text-slate-500 font-mono text-xs mt-1">{{ new Date(selectedLog.createdAt).toLocaleString('id-ID') }}</div>
             </div>
           </div>
 
           <div>
             <div class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Target Perubahan</div>
-            <div class="text-slate-800 font-bold">{{ selectedLog.targetName || '-' }} <span v-if="selectedLog.targetId" class="text-slate-400 font-mono text-xs ml-1">(ID: {{ selectedLog.targetId }})</span></div>
+            <div class="text-slate-800 font-bold">{{ selectedLog.entityType || selectedLog.targetName || '-' }} <span v-if="selectedLog.entityId || selectedLog.targetId" class="text-slate-400 font-mono text-xs ml-1">(ID: {{ selectedLog.entityId || selectedLog.targetId }})</span></div>
             <div class="text-slate-600 mt-1 italic">{{ selectedLog.description }}</div>
+            <div v-if="selectedLog.userAgent" class="text-xs text-slate-400 mt-2 font-mono">User Agent: {{ selectedLog.userAgent }}</div>
           </div>
 
           <div v-if="selectedLog.before || selectedLog.after" class="border-t border-slate-100 pt-4 mt-4">
