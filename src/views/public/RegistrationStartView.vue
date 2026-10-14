@@ -88,7 +88,8 @@ const submitForm = async () => {
       const data = response.data || response;
       localStorage.setItem('spsmb_continue_session', JSON.stringify({
         registrationNumber: data.registrationNumber || data.data?.registrationNumber,
-        continueToken: data.continueToken || data.data?.continueToken
+        continueToken: data.continueToken || data.data?.continueToken,
+        receipt: data.receipt || data.data?.receipt || null
       }))
       router.push('/pendaftaran/sukses')
     }

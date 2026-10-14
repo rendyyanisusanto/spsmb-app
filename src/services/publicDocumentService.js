@@ -9,7 +9,8 @@ const getHeaders = (continueToken) => {
 };
 
 export const getDocuments = async (registrationNumber, continueToken) => {
-  const { data } = await api.get(`/public/applications/${registrationNumber}/documents`, getHeaders(continueToken));
+  const token = encodeURIComponent(continueToken || '');
+  const { data } = await api.get(`/public/applications/${registrationNumber}/documents?token=${token}`, getHeaders(continueToken));
   return data;
 };
 
@@ -18,8 +19,9 @@ export const uploadDocument = async (registrationNumber, continueToken, document
   formData.append('file', file);
   
   const headers = getHeaders(continueToken);
+  const token = encodeURIComponent(continueToken || '');
   
-  const { data } = await api.post(`/public/applications/${registrationNumber}/documents/${documentTypeId}`, formData, headers);
+  const { data } = await api.post(`/public/applications/${registrationNumber}/documents/${documentTypeId}?token=${token}`, formData, headers);
   return data;
 };
 
@@ -28,13 +30,15 @@ export const replaceDocument = async (registrationNumber, continueToken, documen
   formData.append('file', file);
   
   const headers = getHeaders(continueToken);
+  const token = encodeURIComponent(continueToken || '');
   
-  const { data } = await api.put(`/public/applications/${registrationNumber}/documents/${documentTypeId}`, formData, headers);
+  const { data } = await api.put(`/public/applications/${registrationNumber}/documents/${documentTypeId}?token=${token}`, formData, headers);
   return data;
 };
 
 export const deleteDocument = async (registrationNumber, continueToken, documentTypeId) => {
-  const { data } = await api.delete(`/public/applications/${registrationNumber}/documents/${documentTypeId}`, getHeaders(continueToken));
+  const token = encodeURIComponent(continueToken || '');
+  const { data } = await api.delete(`/public/applications/${registrationNumber}/documents/${documentTypeId}?token=${token}`, getHeaders(continueToken));
   return data;
 };
 

@@ -3,149 +3,142 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { 
   getTemplates, 
-  createTemplate, 
   updateTemplate, 
-  duplicateTemplate, 
-  useGlobalTemplate, 
-  deleteTemplate,
-  getEvents,
-  getVariables,
+  getEvents, 
+  getVariables, 
   previewTemplate,
-  updateTemplateStatus
+  previewComposedTemplate,
+  updateTemplateStatus 
 } from '@/services/whatsappTemplateService'
 import { getInstitutions } from '@/services/institutionService'
 import { logAudit } from '@/utils/auditLogger'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
-import BaseConfirmModal from '@/components/ui/BaseConfirmModal.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 
 const { user, hasRole } = useAuth()
 const isSuperAdmin = computed(() => hasRole('SUPER_ADMIN'))
-const adminInstitution = computed(() => user.value?.institutions?.[0]?.name || null)
+const userInstitution = computed(() => user.value?.institutions?.[0] || null)
 
-// Constants
-const availableInstitutions = ref([{ value: 'GLOBAL', label: 'Umum / Global' }])
+// State
+const institutionsList = ref([])
 const eventTypes = ref([])
 const templateVariables = ref([])
-
-// Scope State
-const selectedScope = ref('GLOBAL')
-const selectedInstitution = ref(null)
-
-if (!isSuperAdmin.value) {
-  selectedScope.value = 'LEMBAGA'
-  selectedInstitution.value = user.value?.institutions?.[0]?.id || null
-}
-
-const handleScopeChange = (val) => {
-  if (val === 'GLOBAL') {
-    selectedScope.value = 'GLOBAL'
-    selectedInstitution.value = null
-  } else {
-    selectedScope.value = 'LEMBAGA'
-    selectedInstitution.value = parseInt(val)
-  }
-  fetchTemplates()
-}
-
-// Data State
+const allTemplates = ref([])
 const loading = ref(true)
-const allRawTemplates = ref([]) // will hold templates for current scope
 
-const loadDropdowns = async () => {
+// Navigasi Utama: 'LIST' (Daftar Template) | 'PREVIEW' (Pratinjau Pesan)
+const currentView = ref('LIST')
+
+// Filter
+const selectedEvent = ref('REGISTRATION_CREATED')
+const selectedSectionFilter = ref('ALL') // 'ALL' | 'GLOBAL' | 'PONDOK' | 'FORMAL'
+
+onMounted(async () => {
+  await loadMetadata()
+  await fetchAllTemplates()
+  await generateComposedPreview()
+})
+
+const loadMetadata = async () => {
   try {
-    const instRes = await getInstitutions()
-    if (instRes && instRes.data) {
-      const institutions = instRes.data.map(i => ({ value: i.id, label: i.name }))
-      availableInstitutions.value = [{ value: 'GLOBAL', label: 'Umum / Global' }, ...institutions]
-    }
-    
-    const eventsRes = await getEvents()
-    if (eventsRes && eventsRes.data) {
-      eventTypes.value = eventsRes.data
-    }
-    
-    const varsRes = await getVariables()
+    const [instRes, eventsRes, varsRes] = await Promise.all([
+      getInstitutions(),
+      getEvents(),
+      getVariables()
+    ])
+
+    if (instRes && instRes.data) institutionsList.value = instRes.data
+    if (eventsRes && eventsRes.data) eventTypes.value = eventsRes.data
     if (varsRes && varsRes.data) {
       templateVariables.value = varsRes.data.map(v => ({ name: v.token, label: v.label }))
     }
-  } catch(e) {
-    console.error(e)
+  } catch (err) {
+    console.error('Gagal memuat metadata:', err)
   }
 }
 
-const fetchTemplates = async () => {
+const fetchAllTemplates = async () => {
   loading.value = true
   try {
-    const params = { scope: selectedScope.value }
-    if (selectedScope.value === 'LEMBAGA' && selectedInstitution.value) {
-      params.institutionId = selectedInstitution.value
-    }
-    // Also fetch global so we can resolve fallbacks visually
-    const res = await getTemplates(params)
-    let templatesForScope = res.data || []
-    
-    // if LEBMAGA, also fetch global to show which ones are overridden
-    let globalTemplates = []
-    if (selectedScope.value === 'LEMBAGA') {
-      const globalRes = await getTemplates({ scope: 'GLOBAL' })
-      globalTemplates = globalRes.data || []
-    } else {
-      globalTemplates = templatesForScope
-    }
-    
-    // Build resolved array based on eventTypes
-    allRawTemplates.value = eventTypes.value.map(evt => {
-      const globalTpl = globalTemplates.find(t => t.eventCode === evt.value && t.scope === 'GLOBAL')
-      
-      if (selectedScope.value === 'LEMBAGA') {
-        const overrideTpl = templatesForScope.find(t => t.eventCode === evt.value && t.scope === 'INSTITUTION' && t.institution?.id === selectedInstitution.value)
-        if (overrideTpl) {
-          return {
-            ...overrideTpl,
-            eventLabel: evt.label,
-            isOverride: true,
-            effectiveScope: 'LEMBAGA'
-          }
-        }
-      }
-      
-      return {
-        ...(globalTpl || { id: null, name: 'Belum Ada Template', isActive: false, message: '' }),
-        eventLabel: evt.label,
-        isOverride: false,
-        effectiveScope: 'GLOBAL'
-      }
-    })
-    
+    const res = await getTemplates({})
+    allTemplates.value = res.data || []
   } catch (err) {
-    console.error(err)
+    console.error('Gagal memuat template:', err)
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
-onMounted(async () => {
-  loading.value = true
-  await loadDropdowns()
-  await fetchTemplates()
+// Filtered templates
+const filteredTemplates = computed(() => {
+  return allTemplates.value.filter(tpl => {
+    // Filter Event
+    if (selectedEvent.value && tpl.eventCode !== selectedEvent.value) {
+      return false
+    }
+
+    // Hak Akses Admin Lembaga: hanya miliknya
+    if (!isSuperAdmin.value) {
+      return tpl.institution?.id === userInstitution.value?.id
+    }
+
+    // Filter Kategori Bagian (Super Admin)
+    if (selectedSectionFilter.value === 'GLOBAL') {
+      return tpl.sectionType === 'GLOBAL' || tpl.scope === 'GLOBAL'
+    } else if (selectedSectionFilter.value === 'PONDOK') {
+      return tpl.sectionType === 'PONDOK' || (tpl.scope === 'INSTITUTION' && tpl.institution?.institution_type === 'PONDOK')
+    } else if (selectedSectionFilter.value === 'FORMAL') {
+      return tpl.sectionType === 'FORMAL' || (tpl.scope === 'INSTITUTION' && tpl.institution?.institution_type !== 'PONDOK')
+    }
+
+    return true
+  })
 })
 
-// UI MODALS
-const showFormModal = ref(false)
-const showPreviewModal = ref(false)
+// Toggle status aktif/nonaktif
+const toggleStatus = async (tpl) => {
+  try {
+    loading.value = true
+    await updateTemplateStatus(tpl.id, !tpl.isActive)
+    await fetchAllTemplates()
+    await generateComposedPreview()
+  } catch (err) {
+    alert(err.response?.data?.message || 'Gagal mengubah status template')
+  } finally {
+    loading.value = false
+  }
+}
 
+// Modal Edit
+const showFormModal = ref(false)
 const form = ref({
   id: null,
   name: '',
-  event: '',
+  eventCode: '',
   scope: 'GLOBAL',
+  sectionType: 'GLOBAL',
   institutionId: null,
   message: '',
   active: true,
   code: ''
 })
-
 const unknownVars = ref([])
+
+const openEditModal = (tpl) => {
+  form.value = {
+    id: tpl.id,
+    name: tpl.name,
+    eventCode: tpl.eventCode,
+    scope: tpl.scope,
+    sectionType: tpl.sectionType,
+    institutionId: tpl.institution?.id || null,
+    message: tpl.message || '',
+    active: tpl.isActive,
+    code: tpl.code
+  }
+  checkUnknownVariables()
+  showFormModal.value = true
+}
 
 const checkUnknownVariables = () => {
   const matches = form.value.message.match(/\{\{(.*?)\}\}/g)
@@ -166,8 +159,6 @@ const insertVariable = (varName) => {
     const end = textarea.selectionEnd
     const text = form.value.message
     form.value.message = text.substring(0, start) + varName + text.substring(end)
-    
-    // Focus back and set cursor
     setTimeout(() => {
       textarea.focus()
       textarea.selectionStart = textarea.selectionEnd = start + varName.length
@@ -179,457 +170,454 @@ const insertVariable = (varName) => {
   }
 }
 
-// ACTIONS
-const openEdit = (tpl) => {
-  form.value = {
-    id: tpl.id,
-    name: tpl.name,
-    event: tpl.eventCode,
-    scope: tpl.scope,
-    institutionId: tpl.institution?.id || null,
-    message: tpl.message || '',
-    active: tpl.isActive,
-    code: tpl.code
-  }
-  checkUnknownVariables()
-  showFormModal.value = true
-}
-
-const openCreateOverride = (globalTpl) => {
-  if (!globalTpl.id) {
-    // If no global template exists, create new from scratch
-    form.value = {
-      id: null,
-      name: 'Template Khusus Lembaga',
-      event: globalTpl.eventCode || globalTpl.event, // wait, eventLabel mapping
-      scope: 'INSTITUTION',
-      institutionId: selectedInstitution.value,
-      message: '',
-      active: true,
-      code: ''
-    }
-  } else {
-    form.value = {
-      id: 'duplicate_' + globalTpl.id, // mark for duplication
-      originalId: globalTpl.id,
-      name: globalTpl.name + ' (Khusus Lembaga)',
-      event: globalTpl.eventCode,
-      scope: 'INSTITUTION',
-      institutionId: selectedInstitution.value,
-      message: globalTpl.message || '',
-      active: true,
-      code: globalTpl.code + '_COPY'
-    }
-  }
-  checkUnknownVariables()
-  showFormModal.value = true
-}
-
-const showConfirmModal = ref(false)
-const templateToDelete = ref(null)
-
-const confirmDeleteOverride = (id) => {
-  templateToDelete.value = id
-  showConfirmModal.value = true
-}
-
-const deleteOverride = async () => {
-  if (!templateToDelete.value) return
-  try {
-    loading.value = true
-    await deleteTemplate(templateToDelete.value)
-    await fetchTemplates()
-    showConfirmModal.value = false
-    templateToDelete.value = null
-  } catch (e) {
-    alert(e.response?.data?.message || 'Gagal menghapus override')
-  } finally {
-    loading.value = false
-  }
-}
-
 const saveTemplate = async () => {
   if (!form.value.name.trim() || !form.value.message.trim()) {
-    alert('Nama template dan isi pesan wajib diisi!')
+    alert('Nama template dan isi pesan wajib diisi.')
     return
   }
-  
-  if (unknownVars.value.length > 0) {
-    if (!confirm('Terdapat variabel tidak dikenal. Anda yakin ingin melanjutkan?')) return
-  }
-  
+
   try {
     loading.value = true
-    
-    if (String(form.value.id).startsWith('duplicate_')) {
-      // Create via Duplicate API or just create new
-      const code = form.value.code || `${form.value.event}_${form.value.institutionId}_${Date.now()}`
-      await createTemplate({
-        code: code,
-        name: form.value.name,
-        eventCode: form.value.event,
-        scope: form.value.scope,
-        institutionId: form.value.institutionId,
-        message: form.value.message,
-        isActive: form.value.active
-      })
-    } else if (form.value.id) {
-      // Edit
-      await updateTemplate(form.value.id, {
-        name: form.value.name,
-        eventCode: form.value.event,
-        message: form.value.message,
-        isActive: form.value.active
-      })
-    } else {
-      // Create new (no global existed)
-      const code = form.value.code || `${form.value.event}_${form.value.scope}_${Date.now()}`
-      await createTemplate({
-        code: code,
-        name: form.value.name,
-        eventCode: form.value.event,
-        scope: form.value.scope,
-        institutionId: form.value.institutionId,
-        message: form.value.message,
-        isActive: form.value.active
-      })
-    }
-    
+    await updateTemplate(form.value.id, {
+      name: form.value.name,
+      eventCode: form.value.eventCode,
+      message: form.value.message,
+      isActive: form.value.active
+    })
+
     logAudit({
       action: 'WHATSAPP_TEMPLATE_UPDATE',
       module: 'WHATSAPP',
       targetType: 'TEMPLATE',
-      targetId: form.value.id || Date.now(),
+      targetId: form.value.id,
       targetName: form.value.name,
-      description: `Memperbarui template WhatsApp: ${form.value.name}`,
-      before: null,
-      after: { active: form.value.active, messageLength: form.value.message.length }
+      description: `Memperbarui template WhatsApp: ${form.value.name}`
     })
-    
+
     showFormModal.value = false
-    await fetchTemplates()
-  } catch (e) {
-    alert(e.response?.data?.message || 'Terjadi kesalahan saat menyimpan template')
+    await fetchAllTemplates()
+    await generateComposedPreview()
+  } catch (err) {
+    alert(err.response?.data?.message || 'Gagal menyimpan template')
   } finally {
     loading.value = false
   }
 }
 
-const disableOverride = async (id) => {
-  if (confirm('Nonaktifkan template ini dan gunakan template Global?')) {
-    try {
-      loading.value = true
-      await useGlobalTemplate(id)
-      await fetchTemplates()
-    } catch(e) {
-      alert(e.response?.data?.message || 'Gagal mengubah ke template global')
-    } finally {
-      loading.value = false
-    }
-  }
-}
+// Simulasi Pesan Gabungan
+const previewSimulator = ref({
+  eventCode: 'REGISTRATION_CREATED',
+  pondokId: 1,
+  formalId: 3
+})
+const composedResult = ref({
+  composedMessage: '',
+  renderedSections: { global: '', pondok: '', formal: '' }
+})
+const loadingPreview = ref(false)
 
-// PREVIEW
-const previewRendered = ref('')
-const previewTitle = ref('')
-const openPreview = async (tpl) => {
-  if (!tpl.message) return
-  previewTitle.value = tpl.name
+const pondokList = computed(() => {
+  const items = institutionsList.value.filter(i => i.institution_type === 'PONDOK')
+  if (items.length > 0) return items
+  return [
+    { id: 1, name: 'PPSQ 1 (Putra)' },
+    { id: 2, name: 'PPSQ 2 (Putri)' }
+  ]
+})
+
+const formalList = computed(() => {
+  const items = institutionsList.value.filter(i => i.institution_type !== 'PONDOK')
+  if (items.length > 0) return items
+  return [
+    { id: 3, name: 'SMP IT Asy-Syadzili' },
+    { id: 4, name: 'SMA IT Asy-Syadzili' },
+    { id: 5, name: 'SMK IT Asy-Syadzili' }
+  ]
+})
+
+const generateComposedPreview = async () => {
+  loadingPreview.value = true
   try {
-    const res = await previewTemplate(tpl.eventCode, tpl.message)
-    previewRendered.value = res.data.renderedMessage
-    showPreviewModal.value = true
-  } catch(e) {
-    alert('Gagal membuat preview')
+    const res = await previewComposedTemplate({
+      eventCode: previewSimulator.value.eventCode,
+      pondokInstitutionId: previewSimulator.value.pondokId ? parseInt(previewSimulator.value.pondokId) : null,
+      formalInstitutionId: previewSimulator.value.formalId ? parseInt(previewSimulator.value.formalId) : null
+    })
+    if (res && res.data) {
+      composedResult.value = res.data
+    }
+  } catch (err) {
+    console.error('Gagal membuat preview pesan:', err)
+  } finally {
+    loadingPreview.value = false
   }
 }
 
+// Modal Single Preview
+const showSinglePreviewModal = ref(false)
+const singlePreviewText = ref('')
+const singlePreviewTitle = ref('')
+
+const openSinglePreview = async (tpl) => {
+  try {
+    singlePreviewTitle.value = tpl.name
+    const res = await previewTemplate(tpl.eventCode, tpl.message)
+    singlePreviewText.value = res.data.renderedMessage
+    showSinglePreviewModal.value = true
+  } catch (err) {
+    alert('Gagal memuat pratinjau.')
+  }
+}
 </script>
 
 <template>
-  <div class="whatsapp-template-management pb-20">
+  <div class="whatsapp-management max-w-5xl mx-auto pb-16">
     
-    <!-- Header -->
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-slate-800 mb-1">Management Template WhatsApp</h1>
-      <p class="text-slate-500 m-0">Kelola template pesan WhatsApp berdasarkan aktivitas dan status pendaftaran SPSMB.</p>
-    </div>
-
-    <!-- Filter Card -->
-    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-[0_2px_10px_rgba(0,0,0,0.04)] mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <!-- Header Halaman -->
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h2 class="text-lg font-bold text-slate-800 mb-1">Scope Template</h2>
-        <p class="text-xs text-slate-500 m-0">
-          {{ isSuperAdmin ? 'Pilih untuk melihat Template Global atau Konfigurasi per Lembaga.' : 'Anda sedang melihat konfigurasi pesan khusus untuk lembaga Anda.' }}
+        <h1 class="text-xl font-bold text-slate-900">Template WhatsApp</h1>
+        <p class="text-slate-500 text-xs sm:text-sm mt-0.5">
+          Kelola pesan otomatis untuk pendaftar sesuai pondok dan lembaga formal.
         </p>
       </div>
-      
-      <div class="flex items-center gap-3 w-full sm:w-auto">
-        <div v-if="isSuperAdmin" class="w-full sm:w-64">
-          <select 
-            :value="selectedScope === 'GLOBAL' ? 'GLOBAL' : selectedInstitution"
-            @change="(e) => handleScopeChange(e.target.value)"
-            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 font-bold text-slate-700 cursor-pointer"
-          >
-            <option v-for="opt in availableInstitutions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-        </div>
-        <div v-else class="bg-slate-100 text-slate-700 px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-bold shadow-sm whitespace-nowrap">
-          {{ adminInstitution }}
-        </div>
+
+      <!-- Tombol Pilihan Menu Utama -->
+      <div class="flex gap-2">
+        <button 
+          @click="currentView = 'LIST'"
+          :class="[
+            'px-3.5 py-1.5 rounded text-xs font-medium border transition-colors',
+            currentView === 'LIST' 
+              ? 'bg-slate-900 text-white border-slate-900' 
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+          ]"
+        >
+          Daftar Template
+        </button>
+        <button 
+          @click="currentView = 'PREVIEW'; generateComposedPreview()"
+          :class="[
+            'px-3.5 py-1.5 rounded text-xs font-medium border transition-colors',
+            currentView === 'PREVIEW' 
+              ? 'bg-slate-900 text-white border-slate-900' 
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+          ]"
+        >
+          Pratinjau Pesan Pendaftar
+        </button>
       </div>
     </div>
 
-    <!-- Table List -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-[0_2px_10px_rgba(0,0,0,0.04)] overflow-hidden">
-      <BaseLoading v-if="loading" text="Memuat template WhatsApp..." class="py-12" />
+    <!-- TAMPILAN 1: DAFTAR TEMPLATE -->
+    <div v-if="currentView === 'LIST'" class="space-y-4">
       
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-widest">
-              <th class="p-4 w-[25%]">Event Sistem</th>
-              <th class="p-4 w-[30%]">Nama Template</th>
-              <th class="p-4 w-[15%]">Status & Scope</th>
-              <th class="p-4 w-[15%]">Diubah</th>
-              <th class="p-4 w-[15%] text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in allRawTemplates" :key="row.eventLabel" class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-              
-              <!-- Event Column -->
-              <td class="p-4">
-                <span class="font-bold text-slate-800">{{ row.eventLabel }}</span>
-                <span v-if="row.id === null" class="block text-xs text-red-500 mt-1 font-semibold">Template tidak ditemukan!</span>
-              </td>
-              
-              <!-- Template Name Column -->
-              <td class="p-4">
-                <p v-if="row.id" class="font-bold text-slate-700 m-0">{{ row.name }}</p>
-                <p v-if="row.id" class="text-xs text-slate-400 mt-1 line-clamp-1 border-l-2 border-slate-200 pl-2 italic">"{{ row.message }}"</p>
-                <span v-else class="text-slate-400 italic text-sm">-</span>
-              </td>
-              
-              <!-- Scope & Status Column -->
-              <td class="p-4">
-                <div v-if="row.id" class="flex flex-col gap-2 items-start">
-                  <span v-if="row.effectiveScope === 'GLOBAL'" class="inline-flex items-center px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100 uppercase tracking-widest">
-                    GLOBAL
-                  </span>
-                  <span v-else class="inline-flex items-center px-2 py-1 rounded bg-slate-800 text-white text-[10px] font-bold uppercase tracking-widest">
-                    KHUSUS LEMBAGA
-                  </span>
-                  
-                  <span v-if="row.isActive" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Aktif & Digunakan
-                  </span>
-                  <span v-else class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
-                    <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span> Nonaktif
-                  </span>
-                </div>
-              </td>
-              
-              <!-- Updated At -->
-              <td class="p-4 text-sm text-slate-500 font-mono">
-                {{ row.updatedAt?.split('T')[0] || '-' }}
-              </td>
-              
-              <!-- Actions -->
-              <td class="p-4 text-right">
-                <div class="flex items-center justify-end gap-2">
-                  <button v-if="row.id" @click="openPreview(row)" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-800 text-slate-600 hover:text-slate-900 rounded-lg text-xs font-bold shadow-sm transition-colors whitespace-nowrap">
-                    Preview
-                  </button>
-                  
-                  <!-- If it's a Global scope view, or Super Admin editing Global directly -->
-                  <template v-if="selectedScope === 'GLOBAL'">
-                    <button v-if="row.id" @click="openEdit(row)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm transition-colors whitespace-nowrap">Edit</button>
-                    <!-- SuperAdmin can create if doesn't exist -->
-                    <button v-if="!row.id && isSuperAdmin" @click="openEdit({ eventCode: row.eventLabel, scope: 'GLOBAL', isActive: true })" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm transition-colors whitespace-nowrap">Tambah</button>
-                  </template>
-                  
-                  <!-- If it's a Lembaga scope view -->
-                  <template v-if="selectedScope === 'LEMBAGA'">
-                    <!-- If currently using override -->
-                    <template v-if="row.isOverride">
-                      <button @click="openEdit(row)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm transition-colors whitespace-nowrap">Edit</button>
-                      <button v-if="row.isActive" @click="disableOverride(row.id)" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-bold transition-colors whitespace-nowrap" title="Gunakan Global">Use Global</button>
-                      <button @click="confirmDeleteOverride(row.id)" class="px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition-colors whitespace-nowrap" title="Hapus Override">Hapus</button>
-                    </template>
-                    <!-- If currently falling back to global -->
-                    <template v-else>
-                      <button @click="openCreateOverride(row)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm transition-colors whitespace-nowrap flex items-center gap-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                        Buat Versi Lembaga
-                      </button>
-                    </template>
-                  </template>
-                </div>
-              </td>
-              
-            </tr>
-          </tbody>
-        </table>
+      <!-- Filter Bar Sederhana -->
+      <div class="bg-white p-3.5 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex flex-wrap items-center gap-3">
+          
+          <!-- Filter Event -->
+          <div class="flex items-center gap-2">
+            <span class="text-slate-500 font-medium">Event:</span>
+            <select 
+              v-model="selectedEvent"
+              class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+            >
+              <option value="REGISTRATION_CREATED">Pendaftaran Awal Berhasil</option>
+              <option value="REGISTRATION_SUBMITTED">Pendaftaran Berhasil Dikirim</option>
+            </select>
+          </div>
+
+          <!-- Filter Bagian (Hanya Super Admin) -->
+          <div v-if="isSuperAdmin" class="flex items-center gap-2">
+            <span class="text-slate-500 font-medium">Bagian:</span>
+            <select 
+              v-model="selectedSectionFilter"
+              class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+            >
+              <option value="ALL">Semua Bagian</option>
+              <option value="GLOBAL">Global (Super Admin)</option>
+              <option value="PONDOK">Pondok (PPSQ)</option>
+              <option value="FORMAL">Lembaga Formal</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- Info Hak Akses -->
+        <div class="text-slate-500">
+          Akses: <strong class="text-slate-800">{{ isSuperAdmin ? 'Super Admin' : (userInstitution?.name || 'Admin Lembaga') }}</strong>
+        </div>
       </div>
+
+      <!-- Tabel Template -->
+      <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+        <BaseLoading v-if="loading" text="Memuat template..." class="py-12" />
+
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500">
+                <th class="p-3 w-[26%]">Bagian / Lembaga</th>
+                <th class="p-3 w-[42%]">Isi Pesan</th>
+                <th class="p-3 w-[12%]">Status</th>
+                <th class="p-3 w-[10%]">Diubah</th>
+                <th class="p-3 w-[10%] text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr v-if="filteredTemplates.length === 0">
+                <td colspan="5" class="p-6 text-center text-slate-400 text-xs">
+                  Tidak ada template untuk filter yang dipilih.
+                </td>
+              </tr>
+              <tr 
+                v-for="tpl in filteredTemplates" 
+                :key="tpl.id"
+                class="hover:bg-slate-50/70 transition-colors"
+              >
+                <!-- Nama & Bagian -->
+                <td class="p-3 align-top">
+                  <div class="font-medium text-slate-900">{{ tpl.name }}</div>
+                  <div class="text-xs text-slate-500 mt-0.5">
+                    {{ tpl.institution?.name || 'Global (Super Admin)' }}
+                  </div>
+                </td>
+
+                <!-- Isi Pesan Cuplikan -->
+                <td class="p-3 align-top">
+                  <div class="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 line-clamp-3 leading-relaxed whitespace-pre-line">
+                    {{ tpl.message }}
+                  </div>
+                </td>
+
+                <!-- Status Aktif/Nonaktif -->
+                <td class="p-3 align-top">
+                  <button 
+                    @click="toggleStatus(tpl)"
+                    :disabled="!isSuperAdmin && tpl.sectionType === 'GLOBAL'"
+                    :class="[
+                      'px-2 py-0.5 rounded text-xs font-medium border transition-colors',
+                      tpl.isActive 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                    ]"
+                    title="Klik untuk mengubah status"
+                  >
+                    {{ tpl.isActive ? 'Aktif' : 'Nonaktif' }}
+                  </button>
+                </td>
+
+                <!-- Tanggal Diubah -->
+                <td class="p-3 align-top text-xs text-slate-400">
+                  {{ tpl.updatedAt ? tpl.updatedAt.split('T')[0] : '-' }}
+                </td>
+
+                <!-- Tombol Aksi -->
+                <td class="p-3 align-top text-right">
+                  <div class="flex items-center justify-end gap-1.5">
+                    <button 
+                      @click="openSinglePreview(tpl)"
+                      class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-400 text-slate-700 rounded text-xs font-medium"
+                    >
+                      Pratinjau
+                    </button>
+                    <button 
+                      v-if="isSuperAdmin || (tpl.institution && tpl.institution.id === userInstitution?.id)"
+                      @click="openEditModal(tpl)"
+                      class="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-medium"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
-    
-    <!-- MODAL EDIT / OVERRIDE -->
+
+    <!-- TAMPILAN 2: PRATINJAU PESAN PENDAFTAR -->
+    <div v-else class="space-y-4">
+      
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
+        
+        <!-- Kontrol Pilihan (5 Kolom) -->
+        <div class="md:col-span-5 space-y-4">
+          <div class="bg-white p-4 rounded-lg border border-slate-200 space-y-3.5 text-xs">
+            <h2 class="font-bold text-slate-800 text-sm">Pilihan Pendaftar</h2>
+            <p class="text-slate-500 text-xs">
+              Pilih kombinasi pondok dan lembaga formal untuk melihat pesan yang akan diterima orang tua:
+            </p>
+
+            <div>
+              <label class="block font-medium text-slate-700 mb-1">Event</label>
+              <select 
+                v-model="previewSimulator.eventCode" 
+                @change="generateComposedPreview()"
+                class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+              >
+                <option value="REGISTRATION_CREATED">Pendaftaran Awal Berhasil</option>
+                <option value="REGISTRATION_SUBMITTED">Pendaftaran Berhasil Dikirim</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-medium text-slate-700 mb-1">Pondok Pesantren</label>
+              <select 
+                v-model="previewSimulator.pondokId" 
+                @change="generateComposedPreview()"
+                class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+              >
+                <option v-for="p in pondokList" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-medium text-slate-700 mb-1">Lembaga Formal</label>
+              <select 
+                v-model="previewSimulator.formalId" 
+                @change="generateComposedPreview()"
+                class="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+              >
+                <option v-for="f in formalList" :key="f.id" :value="f.id">
+                  {{ f.name }}
+                </option>
+                <option :value="null">Non-Formal (Tanpa Sekolah)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bg-white p-3.5 rounded-lg border border-slate-200 text-xs text-slate-600">
+            <span class="font-medium text-slate-700 block mb-1">Keterangan:</span>
+            Pesan di sebelah kanan merupakan gabungan informasi dari Super Admin, Pondok Pesantren, dan Lembaga Formal yang dipilih.
+          </div>
+        </div>
+
+        <!-- Layar Pratinjau Teks (7 Kolom) -->
+        <div class="md:col-span-7">
+          <div class="bg-slate-100 p-4 rounded-lg border border-slate-200 flex flex-col min-h-[420px]">
+            <div class="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between text-xs text-slate-600">
+              <span class="font-medium">Tampilan Pesan WhatsApp</span>
+              <span class="text-slate-400">Pratinjau Langsung</span>
+            </div>
+
+            <BaseLoading v-if="loadingPreview" text="Memuat pratinjau pesan..." class="my-auto py-12" />
+
+            <div v-else class="flex-grow flex flex-col justify-start">
+              <div class="bg-[#E7FFDB] text-slate-800 p-3.5 rounded-lg border border-[#C5E1A5] text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                {{ composedResult.composedMessage || 'Tidak ada pesan aktif untuk kombinasi ini.' }}
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-400 text-center mt-3">
+              Pratinjau ini tidak mengirimkan pesan ke nomor WhatsApp pendaftar.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- MODAL EDIT TEMPLATE -->
     <BaseModal 
       :open="showFormModal" 
-      :title="form.id && !String(form.id).startsWith('duplicate') ? 'Edit Template' : 'Buat Template Baru'"
+      :title="`Edit: ${form.name}`"
       @close="showFormModal = false"
-      size="4xl"
+      size="2xl"
     >
-      <div>
-        <p class="text-xs text-slate-500 m-0 mt-0.5 mb-4">Event: <span class="font-bold text-slate-700">{{ eventTypes.find(e => e.value === form.event)?.label || form.event }}</span></p>
+      <div class="space-y-3.5 text-xs">
         
-        <!-- Body: 2 Columns on Desktop -->
-        <div class="flex flex-col md:flex-row flex-grow overflow-hidden min-h-0 border rounded-lg md:max-h-[500px]">
-          
-          <!-- Left: Editor -->
-          <div class="flex-grow p-6 overflow-y-auto border-r border-slate-100 bg-white">
-            <div class="space-y-5">
-              
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Nama Template *</label>
-                  <input type="text" v-model="form.name" class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:bg-white focus:border-slate-800 font-semibold text-slate-800">
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Kode Unik *</label>
-                  <input type="text" v-model="form.code" :disabled="!!form.id && !String(form.id).startsWith('duplicate')" class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:bg-white focus:border-slate-800 font-mono text-slate-800 uppercase" placeholder="Kosongkan u/ otomatis">
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Status</label>
-                  <select v-model="form.active" class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:bg-white focus:border-slate-800 font-semibold text-slate-800">
-                    <option :value="true">Aktif</option>
-                    <option :value="false">Nonaktif</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between uppercase tracking-wide">
-                  Isi Pesan WhatsApp *
-                  <span class="text-slate-400 font-mono text-[10px] lowercase tracking-normal">{{ form.message.length }} karakter</span>
-                </label>
-                <textarea 
-                  id="messageTextarea"
-                  v-model="form.message" 
-                  @input="checkUnknownVariables"
-                  rows="6" 
-                  class="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:bg-white focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-sans leading-relaxed text-slate-800 min-h-[150px]"
-                  placeholder="Ketik isi pesan WhatsApp di sini..."
-                ></textarea>
-                
-                <div v-if="unknownVars.length > 0" class="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-600 shrink-0 mt-0.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  <div>
-                    <p class="text-xs font-bold text-amber-800 m-0">Peringatan: Variabel tidak dikenal ditemukan</p>
-                    <p class="text-xs text-amber-700 m-0 mt-1">Variabel berikut mungkin tidak akan ter-render: <span class="font-mono font-bold">{{ unknownVars.join(', ') }}</span></p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-          
-          <!-- Right: Variable Picker -->
-          <div class="w-full md:w-64 bg-slate-50 shrink-0 flex flex-col border-t md:border-t-0 border-slate-100 h-64 md:h-auto min-h-0">
-            <div class="px-5 py-4 border-b border-slate-200 bg-slate-100 shrink-0">
-              <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                Variabel Tersedia
-              </h3>
-              <p class="text-xs text-slate-500 mt-1 mb-0">Klik variabel untuk menyisipkan ke dalam pesan.</p>
-            </div>
-            <div class="flex-grow overflow-y-auto p-4 space-y-2">
-              <button 
-                v-for="v in templateVariables" 
-                :key="v.name"
-                @click="insertVariable(v.name)"
-                class="w-full text-left px-3 py-2 rounded-lg border border-slate-200 bg-white hover:border-slate-800 hover:shadow-sm transition-all group"
-              >
-                <div class="text-xs font-bold text-slate-700 mb-0.5 group-hover:text-slate-900">{{ v.label }}</div>
-                <div class="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded inline-block">{{ v.name }}</div>
-              </button>
-            </div>
-          </div>
-          
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Nama Template</label>
+          <input 
+            type="text" 
+            v-model="form.name" 
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded text-sm text-slate-800 focus:outline-none focus:bg-white focus:border-slate-800"
+          />
         </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block font-medium text-slate-700">Isi Pesan WhatsApp</label>
+            <span class="text-slate-400">{{ form.message.length }} karakter</span>
+          </div>
+          <textarea 
+            id="messageTextarea"
+            v-model="form.message" 
+            @input="checkUnknownVariables"
+            rows="8" 
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded text-sm text-slate-800 focus:outline-none focus:bg-white focus:border-slate-800 font-sans leading-relaxed"
+            placeholder="Ketik isi pesan..."
+          ></textarea>
+
+          <div v-if="unknownVars.length > 0" class="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-800">
+            Variabel belum terdaftar: <span class="font-mono font-semibold">{{ unknownVars.join(', ') }}</span>
+          </div>
+        </div>
+
+        <!-- Sisipkan Variabel -->
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Sisipkan Variabel:</label>
+          <div class="flex flex-wrap gap-1.5">
+            <button 
+              v-for="v in templateVariables" 
+              :key="v.name"
+              type="button"
+              @click="insertVariable(v.name)"
+              class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs border border-slate-200 transition-colors"
+            >
+              {{ v.label }} <span class="text-slate-400 font-mono">({{ v.name }})</span>
+            </button>
+          </div>
+        </div>
+
       </div>
-      
+
       <template #footer>
-        <div class="flex justify-end gap-3">
-          <button @click="showFormModal = false" class="px-4 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">Batal</button>
-          <button @click="saveTemplate" :disabled="loading" class="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold rounded-lg shadow-sm transition-colors">Simpan Template</button>
+        <div class="flex justify-between items-center w-full">
+          <button 
+            type="button" 
+            @click="openSinglePreview({ name: form.name, eventCode: form.eventCode, message: form.message })" 
+            class="px-3 py-1.5 border border-slate-300 hover:border-slate-400 text-slate-700 text-xs font-medium rounded transition-colors"
+          >
+            Pratinjau
+          </button>
+          <div class="flex gap-2">
+            <button @click="showFormModal = false" class="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800">
+              Batal
+            </button>
+            <button @click="saveTemplate" :disabled="loading" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded transition-colors">
+              Simpan
+            </button>
+          </div>
         </div>
       </template>
     </BaseModal>
 
-    <!-- Confirm Modal -->
-    <BaseConfirmModal 
-      :open="showConfirmModal"
-      title="Hapus Override Template"
-      confirmText="Ya, Hapus Override"
-      @close="showConfirmModal = false"
-      @confirm="deleteOverride"
+    <!-- MODAL PRATINJAU SATUAN -->
+    <BaseModal 
+      :open="showSinglePreviewModal" 
+      :title="`Pratinjau: ${singlePreviewTitle}`"
+      @close="showSinglePreviewModal = false"
+      size="md"
     >
-      Anda yakin ingin menghapus template khusus ini? Pesan akan kembali menggunakan <strong>Template Global</strong> (jika ada).
-    </BaseConfirmModal>
-
-    <!-- WHATSAPP PREVIEW MODAL -->
-    <div v-if="showPreviewModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-      <div class="w-full max-w-sm flex flex-col">
-        <!-- Close Button -->
-        <div class="flex justify-between items-center mb-4 text-white">
-          <h3 class="font-bold">Simulasi Render Template</h3>
-          <button @click="showPreviewModal = false" class="hover:text-slate-300 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      <div class="bg-slate-100 p-3 rounded border border-slate-200">
+        <div class="bg-[#E7FFDB] p-3 rounded text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans text-slate-800 border border-[#C5E1A5]">
+          {{ singlePreviewText }}
         </div>
-        
-        <!-- Fake Phone Screen -->
-        <div class="bg-[#efeae2] rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-800 relative">
-          <!-- Fake Header -->
-          <div class="bg-[#005c4b] text-white px-4 py-3 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <div>
-              <div class="font-semibold text-sm">SPSMB Asy-Syadzili</div>
-              <div class="text-[10px] text-white/70">Akun Resmi</div>
-            </div>
-          </div>
-          
-          <!-- Chat Area -->
-          <div class="p-4 min-h-[300px] max-h-[60vh] overflow-y-auto" style="background-image: radial-gradient(#d3c9ba 1px, transparent 1px); background-size: 20px 20px;">
-            <div class="bg-white rounded-xl rounded-tl-none p-3 shadow-sm inline-block max-w-[90%] text-sm text-[#111b21] leading-relaxed whitespace-pre-wrap break-words font-sans">
-              {{ previewRendered }}
-              
-              <div class="text-[10px] text-slate-400 text-right mt-1.5 flex justify-end items-center gap-1">
-                {{ new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }}
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-500"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>
-              </div>
-            </div>
-          </div>
-        </div>
-        
       </div>
-    </div>
-    
+      <template #footer>
+        <button @click="showSinglePreviewModal = false" class="px-4 py-1.5 bg-slate-800 text-white text-xs font-medium rounded ml-auto">
+          Tutup
+        </button>
+      </template>
+    </BaseModal>
+
   </div>
 </template>
-
-<style scoped>
-/* Phone scrollbar styling */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 4px;
-}
-.overflow-y-auto::-webkit-scrollbar-track {
-  background: transparent;
-}
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.1);
-  border-radius: 4px;
-}
-</style>

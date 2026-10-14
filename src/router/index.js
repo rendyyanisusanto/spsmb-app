@@ -124,6 +124,12 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
         },
         {
+          path: 'whatsapp/gateway',
+          name: 'admin-wa-gateway',
+          component: () => import('@/views/admin/WhatsappGatewayView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+        },
+        {
           path: 'whatsapp/template',
           name: 'admin-wa-template',
           component: () => import('@/views/admin/WhatsappTemplateManagementView.vue'),

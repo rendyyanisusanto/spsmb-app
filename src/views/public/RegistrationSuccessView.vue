@@ -14,15 +14,31 @@ onMounted(async () => {
   const sessionData = localStorage.getItem('spsmb_continue_session')
   if (sessionData) {
     try {
-      const { registrationNumber, continueToken } = JSON.parse(sessionData)
-      const response = await publicRegistrationService.getRegistrationReceipt(registrationNumber, continueToken)
-      if (response && response.data) {
+      const parsed = JSON.parse(sessionData)
+      const { registrationNumber, continueToken, receipt } = parsed
+
+      // Gunakan cached receipt jika tersedia dari submit pendaftaran awal
+      if (receipt) {
         registrationData.value = {
-          ...response.data,
+          ...receipt,
           continueToken
         }
-      } else {
-        router.push('/pendaftaran')
+      }
+
+      // Coba fetch receipt terbaru dari API
+      try {
+        const response = await publicRegistrationService.getRegistrationReceipt(registrationNumber, continueToken)
+        if (response && response.data) {
+          registrationData.value = {
+            ...response.data,
+            continueToken
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Gagal mengambil data tanda bukti dari server, menggunakan data tersimpan:', fetchErr)
+        if (!registrationData.value) {
+          router.push('/pendaftaran')
+        }
       }
     } catch (error) {
       console.error(error)

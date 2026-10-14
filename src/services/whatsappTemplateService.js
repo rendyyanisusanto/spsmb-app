@@ -55,3 +55,8 @@ export const resolveTemplate = async (eventCode, institutionId) => {
   if (institutionId) params.institutionId = institutionId;
   return await api.get(`/whatsapp-templates/resolve${buildQueryString(params)}`);
 };
+
+export const previewComposedTemplate = async (payload) => {
+  return await api.post('/whatsapp-templates/preview-composed', payload);
+};
+

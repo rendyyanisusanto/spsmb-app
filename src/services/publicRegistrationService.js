@@ -10,7 +10,8 @@ const publicRegistrationService = {
   },
   
   getRegistrationReceipt(registrationNumber, continueToken) {
-    return api.get(`/public/applications/${registrationNumber}/receipt`, {
+    const encodedToken = encodeURIComponent(continueToken || '');
+    return api.get(`/public/applications/${registrationNumber}/receipt?token=${encodedToken}`, {
       headers: {
         'x-continue-token': continueToken
       }

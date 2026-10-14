@@ -213,9 +213,16 @@ const handleLogoUpload = (e) => {
               
               <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-600 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <div class="text-sm text-blue-800">
-                  <p class="font-bold mb-1">Informasi Konfigurasi</p>
-                  <p class="opacity-90 m-0">Pengaturan credential WhatsApp API sesungguhnya akan dikonfigurasi melalui Backend (Server) untuk keamanan. Di sini Anda hanya mengatur preferensi frontend/UI.</p>
+                <div class="text-sm text-blue-800 flex-1">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <p class="font-bold mb-1">WhatsApp Gateway GOWA v9 Terhubung</p>
+                      <p class="opacity-90 m-0 text-xs">Kredensial tersimpan aman di server backend. Anda dapat memantau status server, memeriksa status login WhatsApp, atau mengirim pesan uji coba di halaman WhatsApp Gateway.</p>
+                    </div>
+                    <router-link to="/admin/whatsapp/gateway" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-bold shrink-0 text-center transition-colors shadow-sm">
+                      Kelola Gateway & Uji Coba &rarr;
+                    </router-link>
+                  </div>
                 </div>
               </div>
 
