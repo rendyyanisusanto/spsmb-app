@@ -1,12 +1,14 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
-import { getApplications, exportApplications } from '@/services/applicationService'
+import { getApplications, exportApplications, deleteApplication } from '@/services/applicationService'
 import * as XLSX from 'xlsx'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseEmptyState from '@/components/ui/BaseEmptyState.vue'
 import BaseErrorState from '@/components/ui/BaseErrorState.vue'
 import BaseConfirmModal from '@/components/ui/BaseConfirmModal.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import ResendWhatsappModal from '@/components/admin/ResendWhatsappModal.vue'
 import { formatDate } from '@/utils/date'
 import { formatPhoneDisplay } from '@/utils/phone'
 const { user } = useAuth()
@@ -17,6 +19,19 @@ const isExporting = ref(false)
 const applicants = ref([])
 const pagination = ref({ page: 1, limit: 10, total: 0, totalPages: 0 })
 const stats = ref({ total: 0, sudahSantri: 0, menunggu: 0, persentase: 0 })
+
+// State for WhatsApp Resend
+const resendingId = ref(null)
+const showResendModal = ref(false)
+const selectedApplicant = ref(null)
+const resendFeedback = ref({ type: '', text: '' })
+const isResending = ref(false)
+
+// State for Delete Applicant
+const showDeleteModal = ref(false)
+const applicantToDelete = ref(null)
+const isDeleting = ref(false)
+const notification = ref({ show: false, type: 'success', message: '' })
 
 const filters = ref({
   search: '',
@@ -34,15 +49,13 @@ const fetchApplicants = async () => {
       limit: filters.value.limit,
       search: filters.value.search
     }
-    // We map 'lembaga' to formalInstitutionId/pondokInstitutionId if we had ID, but we only have string from filter
-    // Assuming backend search handles generic search, we'll just pass status or leave it.
-    // For now, let's keep it simple.
 
     const res = await getApplications(apiParams)
     if (res.meta) {
       // Map API response to match UI format
       applicants.value = res.data.map(app => ({
         id: app.id,
+        registrationNumber: app.registrationNumber,
         nama: app.applicant?.fullName || 'Anonim',
         alamat: '', // Address not provided in list
         jenis_kelamin: app.applicant?.gender === 'MALE' ? 'Laki-laki' : (app.applicant?.gender === 'FEMALE' ? 'Perempuan' : '-'),
@@ -50,6 +63,9 @@ const fetchApplicants = async () => {
         lembaga_pendidikan: app.formalInstitution?.name || app.pondokInstitution?.name || app.registrationType,
         isConfirmed: app.status === 'SUBMITTED',
         status: app.status,
+        whatsappStatus: app.whatsappStatus || 'UNSENT',
+        whatsappSentAt: app.whatsappSentAt || null,
+        whatsappError: app.whatsappError || null,
         created_at: app.createdAt
       }))
       pagination.value = res.meta
@@ -148,11 +164,75 @@ const lembagaOptions = [
   { value: 'SMK IT Asy-Syadzili', label: 'SMK IT Asy-Syadzili' },
   { value: 'Non Formal', label: 'Non Formal' }
 ]
+
+const openResendModal = (applicant) => {
+  selectedApplicant.value = applicant
+  showResendModal.value = true
+}
+
+const closeResendModal = () => {
+  showResendModal.value = false
+  selectedApplicant.value = null
+}
+
+const handleWhatsappSent = ({ applicantId }) => {
+  const target = applicants.value.find(a => a.id === applicantId)
+  if (target) {
+    target.whatsappStatus = 'SENT'
+    target.whatsappSentAt = new Date().toISOString()
+    target.whatsappError = null
+  }
+}
+
+const confirmDelete = (applicant) => {
+  applicantToDelete.value = applicant
+  showDeleteModal.value = true
+}
+
+const closeDeleteModal = () => {
+  if (isDeleting.value) return
+  showDeleteModal.value = false
+  applicantToDelete.value = null
+}
+
+const handleDeleteApplicant = async () => {
+  if (!applicantToDelete.value) return
+  isDeleting.value = true
+  try {
+    const res = await deleteApplication(applicantToDelete.value.id)
+    showDeleteModal.value = false
+    applicantToDelete.value = null
+    notification.value = {
+      show: true,
+      type: 'success',
+      message: res.message || 'Data pendaftar berhasil dihapus.'
+    }
+    setTimeout(() => {
+      notification.value.show = false
+    }, 4000)
+    await fetchApplicants()
+  } catch (err) {
+    alert(err?.response?.data?.message || err?.message || 'Gagal menghapus data pendaftar')
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <template>
   <div class="applicants-container">
     <BaseErrorState v-if="error" :message="error" @retry="fetchApplicants" class="mb-6" />
+
+    <!-- Notification Alert -->
+    <div v-if="notification.show" class="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between shadow-xs">
+      <div class="flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle mr-2 text-emerald-600"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span class="text-sm font-medium">{{ notification.message }}</span>
+      </div>
+      <button @click="notification.show = false" class="text-emerald-500 hover:text-emerald-700 p-1 rounded-md">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
     
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
@@ -304,8 +384,9 @@ const lembagaOptions = [
               <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">No HP</th>
               <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Lembaga</th>
               <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Status</th>
+              <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Status WA</th>
               <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Tanggal Daftar</th>
-              <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center w-32">Aksi</th>
+              <th class="py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center w-36">Aksi</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -353,6 +434,32 @@ const lembagaOptions = [
                   Draft
                 </span>
               </td>
+              <td class="py-3 px-5">
+                <span 
+                  v-if="data.whatsappStatus === 'SENT'" 
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium"
+                  :title="data.whatsappSentAt ? 'Terkirim: ' + formatDate(data.whatsappSentAt) : 'Pesan WhatsApp terkirim'"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                  Terkirim
+                </span>
+                <span 
+                  v-else-if="data.whatsappStatus === 'FAILED'" 
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-medium cursor-help"
+                  :title="data.whatsappError || 'Pengiriman pesan WhatsApp gagal'"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>
+                  Gagal
+                </span>
+                <span 
+                  v-else 
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-xs font-medium"
+                  title="Belum pernah dikirim WhatsApp"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></span>
+                  Belum
+                </span>
+              </td>
               <td class="py-3 px-5 text-sm text-slate-500">
                 {{ formatDate(data.created_at) }}
               </td>
@@ -361,10 +468,25 @@ const lembagaOptions = [
                   <router-link :to="`/admin/pendaftar/${data.id}`" class="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors" title="Lihat Detail">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                   </router-link>
-                  <button class="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded transition-colors" title="Kirim WhatsApp">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+                  <button 
+                    @click="openResendModal(data)"
+                    :disabled="resendingId === data.id"
+                    class="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                    :title="data.whatsappStatus === 'SENT' ? 'Kirim Ulang WhatsApp (Resend)' : 'Kirim WhatsApp'"
+                  >
+                    <svg v-if="resendingId === data.id" class="animate-spin w-4 h-4 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-repeat">
+                      <path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+                    </svg>
                   </button>
-                  <button v-if="!data.isConfirmed" class="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors" title="Hapus">
+                  <button 
+                    @click="confirmDelete(data)" 
+                    class="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors" 
+                    title="Hapus Pendaftar"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
                   </button>
                 </div>
@@ -408,5 +530,40 @@ const lembagaOptions = [
         </div>
       </div>
     </div>
+
+    <!-- Modal Resend WhatsApp -->
+    <ResendWhatsappModal
+      :open="showResendModal"
+      :applicant-id="selectedApplicant?.id"
+      :applicant="selectedApplicant"
+      @close="closeResendModal"
+      @sent="handleWhatsappSent"
+    />
+
+    <!-- Modal Konfirmasi Hapus Pendaftar -->
+    <BaseConfirmModal 
+      :open="showDeleteModal"
+      title="Hapus Data Pendaftar"
+      confirm-text="Ya, Hapus Pendaftar"
+      cancel-text="Batal"
+      confirm-variant="danger"
+      :loading="isDeleting"
+      @close="closeDeleteModal"
+      @confirm="handleDeleteApplicant"
+    >
+      <p class="text-sm text-slate-600 mb-2">
+        Apakah Anda yakin ingin menghapus data pendaftar berikut?
+      </p>
+      <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-sm space-y-1.5 my-3">
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">No. Pendaftaran:</span> <strong class="text-slate-800 font-mono">{{ applicantToDelete?.registrationNumber }}</strong></div>
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">Nama:</span> <strong class="text-slate-800">{{ applicantToDelete?.nama }}</strong></div>
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">Lembaga:</span> <span class="text-slate-700">{{ applicantToDelete?.lembaga_pendidikan }}</span></div>
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">Status:</span> <span class="text-slate-700">{{ applicantToDelete?.status }}</span></div>
+      </div>
+      <p class="text-xs text-rose-600 font-medium m-0 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle mr-1.5 inline-block shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17"/></svg>
+        Semua berkas lampiran dan data formulir pendaftar ini akan dihapus secara permanen.
+      </p>
+    </BaseConfirmModal>
   </div>
 </template>

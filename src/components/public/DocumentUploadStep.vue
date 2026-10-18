@@ -15,13 +15,41 @@ const documents = ref([])
 const summary = ref({})
 const error = ref('')
 
+const isPrestasiDoc = (doc) => {
+  const code = (doc.code || '').toLowerCase()
+  const name = (doc.name || '').toLowerCase()
+  return code.includes('prestasi') || name.includes('prestasi') || code.includes('piagam') || name.includes('piagam')
+}
+
+const sortDocuments = (docs) => {
+  if (!Array.isArray(docs)) return []
+  const targetTypeOrder = { 'COMMON': 1, 'PONDOK_COMMON': 2, 'INSTITUTION': 3 }
+  return [...docs].sort((a, b) => {
+    // 1. Dokumen prestasi ditaruh dibawah sendiri
+    const presA = isPrestasiDoc(a) ? 1 : 0
+    const presB = isPrestasiDoc(b) ? 1 : 0
+    if (presA !== presB) return presA - presB
+
+    // 2. Dokumen dari lembaga dibawah global
+    const orderA = targetTypeOrder[a.targetType] || 2
+    const orderB = targetTypeOrder[b.targetType] || 2
+    if (orderA !== orderB) return orderA - orderB
+
+    const sortA = a.sortOrder ?? 0
+    const sortB = b.sortOrder ?? 0
+    if (sortA !== sortB) return sortA - sortB
+
+    return (a.documentTypeId || 0) - (b.documentTypeId || 0)
+  })
+}
+
 const fetchDocuments = async () => {
   loading.value = true
   error.value = ''
   try {
     const res = await getDocuments(props.registrationNumber, props.continueToken)
     if (res && res.documents) {
-      documents.value = res.documents
+      documents.value = sortDocuments(res.documents)
       summary.value = res.summary
       emit('completeness-change', summary.value.complete)
     }
@@ -124,10 +152,12 @@ const viewFile = (doc) => {
           <div class="p-5 flex flex-col md:flex-row gap-5 items-start md:items-center">
             
             <div class="flex-grow">
-              <div class="flex items-center gap-2 mb-1">
+              <div class="flex items-center gap-2 mb-1 flex-wrap">
                 <h4 class="font-bold text-slate-800 m-0 text-base">{{ doc.name }}</h4>
                 <span v-if="doc.required" class="text-xs font-bold text-red-500 uppercase tracking-wider bg-red-50 px-2 py-0.5 rounded">Wajib</span>
                 <span v-else class="text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">Opsional</span>
+                <span v-if="doc.targetType === 'INSTITUTION'" class="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">Lembaga</span>
+                <span v-if="isPrestasiDoc(doc)" class="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">Prestasi</span>
               </div>
               <p class="text-sm text-slate-500 mb-2">{{ doc.description }}</p>
               

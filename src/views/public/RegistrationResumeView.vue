@@ -25,8 +25,14 @@ onMounted(() => {
         continueToken
       }))
       
-      // Arahkan langsung ke form pendaftaran lengkap
-      router.replace('/pendaftaran/lengkap')
+      const target = String(route.query.to || route.query.target || '').toLowerCase()
+      if (target === 'struk' || target === 'receipt' || target === 'sukses' || target === 'bukti') {
+        // Arahkan ke tanda bukti / struk pendaftaran
+        router.replace('/pendaftaran/sukses')
+      } else {
+        // Arahkan langsung ke form pendaftaran lengkap
+        router.replace('/pendaftaran/lengkap')
+      }
     } else {
       // Hash tidak valid
       router.replace('/pendaftaran')

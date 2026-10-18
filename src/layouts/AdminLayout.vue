@@ -25,10 +25,10 @@ const handleLogout = async () => {
 const menuItems = [
   { icon: 'LayoutDashboard', label: 'Dashboard', href: '/admin', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
   { icon: 'Users', label: 'Pendaftar', href: '/admin/pendaftar', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
-  { icon: 'Building2', label: 'Lembaga', href: '/admin/lembaga', roles: ['SUPER_ADMIN'] },
+  { icon: 'Building2', label: 'Lembaga', href: '/admin/lembaga', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
   { icon: 'CalendarDays', label: 'Periode / Gelombang', href: '/admin/periode', roles: ['SUPER_ADMIN'] },
   { icon: 'GraduationCap', label: 'Program / Jurusan', href: '/admin/program', roles: ['SUPER_ADMIN'] },
-  { icon: 'FormInput', label: 'Form Pendaftaran', href: '/admin/form', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
+  { icon: 'FormInput', label: 'Form Pendaftaran Lengkap', href: '/admin/form', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
   { icon: 'FileText', label: 'Persyaratan / Dokumen', href: '/admin/persyaratan', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
   { icon: 'Radio', label: 'Gateway WhatsApp', href: '/admin/whatsapp/gateway', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },
   { icon: 'MessageSquare', label: 'Template WhatsApp', href: '/admin/whatsapp/template', roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] },

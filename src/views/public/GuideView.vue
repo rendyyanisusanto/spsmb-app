@@ -42,7 +42,7 @@ const nextStep = () => {
       <div class="stepLine"></div>
       <div class="step">
         <span class="stepNumber">2</span>
-        <span class="stepLabel">Pendaftaran</span>
+        <span class="stepLabel">Pendaftaran Awal</span>
       </div>
     </div>
 
@@ -51,16 +51,16 @@ const nextStep = () => {
       <div class="infoSection">
         <h3 class="infoTitle">Tata Cara Pendaftaran :</h3>
         <ol class="infoList">
-          <li>Isi form pendaftaran dengan benar</li>
-          <li>Pastikan nomor WA yang bisa di hubungi</li>
-          <li>Setelah semua benar silahkan klik daftar</li>
-          <li>Admin akan menghubungi nomor yang terdaftar untuk data lanjutan</li>
+          <li>Isi form pendaftaran awal dengan benar</li>
+          <li>Pastikan nomor WA aktif yang bisa dihubungi</li>
+          <li>Setelah pendaftaran awal, Anda akan mendapatkan nomor registrasi dan akses link Form Pendaftaran Lengkap</li>
+          <li>Lengkapi data dan berkas pada Form Pendaftaran Lengkap</li>
           <li>Apabila terkendala silahkan hubungi admin melalui live chat</li>
         </ol>
 
         <div class="stepActions">
           <button @click="nextStep" class="nextButton">
-            Mulai Pendaftaran &rarr;
+            Mulai Pendaftaran Awal &rarr;
           </button>
         </div>
       </div>

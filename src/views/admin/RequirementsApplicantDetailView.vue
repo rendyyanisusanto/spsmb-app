@@ -31,9 +31,27 @@ const fetchDetail = async () => {
     let allReqs = savedReqs ? JSON.parse(savedReqs) : []
     
     // filter to GLOBAL + Applicant's Institution
+    const isPrestasi = (r) => {
+      const code = (r.code || '').toLowerCase()
+      const name = (r.name || '').toLowerCase()
+      return code.includes('prestasi') || name.includes('prestasi') || code.includes('piagam') || name.includes('piagam')
+    }
+
+    const scopeOrder = { 'GLOBAL': 1, 'LEMBAGA': 2 }
+
     requirements.value = allReqs.filter(r => 
       r.active && (r.scope === 'GLOBAL' || (r.scope === 'LEMBAGA' && r.institutionName === applicant.value.institution))
-    ).sort((a, b) => a.order - b.order)
+    ).sort((a, b) => {
+      const presA = isPrestasi(a) ? 1 : 0
+      const presB = isPrestasi(b) ? 1 : 0
+      if (presA !== presB) return presA - presB
+
+      const orderA = scopeOrder[a.scope] || 2
+      const orderB = scopeOrder[b.scope] || 2
+      if (orderA !== orderB) return orderA - orderB
+
+      return (a.order || 0) - (b.order || 0)
+    })
     
   }
   loading.value = false

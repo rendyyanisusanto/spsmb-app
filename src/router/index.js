@@ -91,7 +91,7 @@ const router = createRouter({
           path: 'lembaga',
           name: 'admin-institution',
           component: () => import('@/views/admin/InstitutionView.vue'),
-          meta: { roles: ['SUPER_ADMIN'] }
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
         },
         {
           path: 'periode',

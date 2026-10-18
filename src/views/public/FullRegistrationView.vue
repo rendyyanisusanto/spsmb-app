@@ -179,8 +179,10 @@ const prevStep = async () => {
 
     <template v-else-if="formData">
       <!-- Pendaftaran Header Info -->
-      <div class="infoSection mb-8 max-w-[600px] mx-auto">
-        <h3 class="infoTitle mb-2">Nomor Pendaftaran: {{ applicationData.registrationNumber }}</h3>
+      <div class="infoSection mb-8 max-w-[600px] mx-auto text-center">
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 mb-2">Form Pendaftaran Lengkap • Tahap 2</span>
+        <h2 class="text-2xl font-bold text-slate-800 mb-1">Form Pendaftaran Lengkap</h2>
+        <h3 class="infoTitle mb-2 text-base font-semibold text-slate-600">Nomor Registrasi: {{ applicationData.registrationNumber }}</h3>
         <p class="text-slate-700 text-[0.95rem] m-0 font-medium">
           {{ applicationData.registrationType }} 
           <span v-if="applicationData.formalInstitution">&bull; {{ applicationData.formalInstitution.name }}</span>

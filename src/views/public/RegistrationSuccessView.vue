@@ -1,10 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import jsPDF from 'jspdf'
-import QRCode from 'qrcode'
 import '@/assets/styles/receipt.css'
 import publicRegistrationService from '@/services/publicRegistrationService'
+import { generateReceiptPdf } from '@/utils/receiptPdf'
 
 const router = useRouter()
 const registrationData = ref(null)
@@ -75,98 +74,12 @@ const continueRegistration = () => {
 const printReceipt = async () => {
   try {
     isGeneratingPdf.value = true
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
+    const resumeHash = getResumeHash()
+    await generateReceiptPdf({
+      ...registrationData.value,
+      resumeHash,
+      continueUrl: resumeHash ? `${window.location.origin}/pendaftaran/lanjut/${resumeHash}` : ''
     })
-    
-    // Config
-    const margin = 20
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    let yPos = 20
-    
-    // Header
-    pdf.setFontSize(16)
-    pdf.setFont('helvetica', 'bold')
-    pdf.text('BUKTI PENDAFTARAN AWAL SANTRI BARU', pageWidth / 2, yPos, { align: 'center' })
-    yPos += 8
-    
-    pdf.setFontSize(14)
-    pdf.text('PONDOK PESANTREN ASY-SYADZILI', pageWidth / 2, yPos, { align: 'center' })
-    yPos += 10
-    
-    // Line separator
-    pdf.setLineWidth(0.5)
-    pdf.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 15
-    
-    // ID Pendaftaran
-    pdf.setFontSize(12)
-    pdf.text(`ID Pendaftaran: ${registrationData.value.registrationNumber}`, margin, yPos)
-    yPos += 12
-    
-    // Data Table
-    pdf.setFontSize(10)
-    pdf.setFont('helvetica', 'normal')
-    
-    const drawRow = (label, value) => {
-      pdf.setFont('helvetica', 'bold')
-      pdf.text(label, margin, yPos)
-      pdf.setFont('helvetica', 'normal')
-      
-      // Multiline support for value
-      const splitValue = pdf.splitTextToSize(value || '-', 100)
-      pdf.text(splitValue, margin + 50, yPos)
-      yPos += (splitValue.length * 6) + 4
-    }
-    
-    drawRow('Nama Lengkap', registrationData.value.studentName)
-    drawRow('Jenis Kelamin', registrationData.value.gender === 'MALE' ? 'Laki-laki' : 'Perempuan')
-    drawRow('Nomor HP/WA', registrationData.value.whatsapp)
-    drawRow('Nama Wali', registrationData.value.parentName)
-    drawRow('Alamat', registrationData.value.address)
-    if (registrationData.value.previousSchool) {
-      drawRow('Sekolah Asal', registrationData.value.previousSchool)
-    }
-    drawRow('Lembaga Tujuan', registrationData.value.institution?.name || 'Non Formal')
-    drawRow('Tanggal Daftar', formatDate(registrationData.value.createdAt))
-    
-    yPos += 10
-    pdf.setLineWidth(0.5)
-    pdf.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 15
-    
-    // Next Step Info
-    pdf.setFontSize(12)
-    pdf.setFont('helvetica', 'bold')
-    pdf.text('Informasi Penting:', margin, yPos)
-    yPos += 8
-    
-    pdf.setFontSize(10)
-    pdf.setFont('helvetica', 'normal')
-    pdf.text('Pendaftaran Anda belum selesai. Silakan lanjutkan pengisian data lengkap.', margin, yPos)
-    yPos += 8
-    
-    const nextStepUrl = window.location.origin + '/pendaftaran/lanjut/' + getResumeHash()
-    pdf.text('Akses link berikut untuk melanjutkan pendaftaran dari perangkat manapun:', margin, yPos)
-    yPos += 6
-    
-    pdf.setTextColor(0, 0, 255)
-    pdf.text(nextStepUrl, margin, yPos)
-    pdf.setTextColor(0, 0, 0)
-    yPos += 10
-    
-    // Generate QR Code
-    const qrDataUrl = await QRCode.toDataURL(nextStepUrl, { width: 100, margin: 1 })
-    pdf.addImage(qrDataUrl, 'PNG', margin, yPos, 40, 40)
-    
-    // Footer
-    pdf.setFontSize(8)
-    pdf.setFont('helvetica', 'italic')
-    pdf.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, margin, pdf.internal.pageSize.getHeight() - 15)
-    
-    pdf.save(`Bukti_Pendaftaran_${registrationData.value.registrationNumber}.pdf`)
   } catch (error) {
     console.error('Error generating PDF:', error)
     alert('Gagal membuat dokumen PDF. Silakan coba lagi.')
@@ -186,7 +99,7 @@ const printReceipt = async () => {
           <!-- Header -->
           <div class="header">
             <h1 class="title">PONDOK PESANTREN ASY-SYADZILI</h1>
-            <h2 class="subtitle">BUKTI PENDAFTARAN SANTRI BARU</h2>
+            <h2 class="subtitle">BUKTI FORM PENDAFTARAN AWAL</h2>
             <div class="divider"></div>
           </div>
 
@@ -243,9 +156,9 @@ const printReceipt = async () => {
             <div class="notice">
               <h3 class="noticeTitle">📋 Informasi Penting</h3>
               <ul class="noticeList">
-                <li><strong>Pendaftaran Anda belum selesai.</strong></li>
-                <li>Silakan lanjutkan pengisian data lengkap calon santri/murid.</li>
-                <li>Simpan bukti pendaftaran ini dengan baik.</li>
+                <li><strong>Tahap 1 (Form Pendaftaran Awal) Berhasil!</strong></li>
+                <li>Silakan lanjutkan ke <strong>Form Pendaftaran Lengkap</strong> untuk melengkapi biodata dan berkas calon santri.</li>
+                <li>Simpan bukti pendaftaran awal ini dengan baik.</li>
               </ul>
             </div>
 
@@ -262,15 +175,15 @@ const printReceipt = async () => {
       <!-- Action Buttons -->
       <div class="pt-2 pb-6 px-6" data-html2canvas-ignore="true">
         <div class="border-t-2 border-dashed border-emerald-800/30 pt-6">
-          <h3 class="text-center font-bold text-emerald-900 mb-4 text-sm sm:text-base">Silakan Lanjutkan Proses Pendaftaran Anda:</h3>
+          <h3 class="text-center font-bold text-emerald-900 mb-4 text-sm sm:text-base">Silakan Lanjutkan ke Form Pendaftaran Lengkap:</h3>
           <div class="actions" style="margin-top: 0;">
             <button @click="printReceipt" class="printButton" :disabled="isGeneratingPdf">
               <span v-if="isGeneratingPdf">Mempersiapkan PDF...</span>
-              <span v-else>🖨️ Cetak Pendaftaran</span>
+              <span v-else>🖨️ Cetak Bukti Pendaftaran Awal</span>
             </button>
             
             <button @click="continueRegistration" class="newRegistrationButton">
-              Lanjutkan Pendaftaran &rarr;
+              Isi Form Pendaftaran Lengkap &rarr;
             </button>
           </div>
         </div>

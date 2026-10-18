@@ -40,3 +40,19 @@ export const updateApplicationStatus = async (id, status) => {
   const response = await api.patch(`/applications/${id}/status`, { status });
   return response.data;
 };
+
+export const resendApplicationWhatsapp = async (id, payload = {}) => {
+  const response = await api.post(`/applications/${id}/resend-whatsapp`, payload);
+  return response.data || response;
+};
+
+export const getResendPreview = async (id) => {
+  const response = await api.get(`/applications/${id}/resend-preview`);
+  return response.data || response;
+};
+
+export const deleteApplication = async (id) => {
+  const response = await api.delete(`/applications/${id}`);
+  return response.data || response;
+};
+

@@ -121,7 +121,7 @@ const goBack = () => {
       <div class="stepLine"></div>
       <div class="step activeStep">
         <span class="stepNumber">2</span>
-        <span class="stepLabel">Pendaftaran</span>
+        <span class="stepLabel">Pendaftaran Awal</span>
       </div>
     </div>
 
@@ -141,7 +141,11 @@ const goBack = () => {
       </div>
 
       <div v-else class="formSection">
-        <h3 class="formTitle">Form Pendaftaran</h3>
+        <div class="mb-4">
+          <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 mb-1">Tahap 1</span>
+          <h3 class="formTitle">Form Pendaftaran Awal</h3>
+          <p class="text-xs text-slate-500 m-0">Isi data identitas awal calon santri untuk mendapatkan nomor registrasi dan akun pendaftaran.</p>
+        </div>
 
         <form @submit.prevent="submitForm" class="form">
           <div class="inputGroup">

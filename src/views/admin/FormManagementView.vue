@@ -285,8 +285,8 @@ const onWrapperClick = (e) => {
     
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800 mb-1">Management Form Pendaftaran</h1>
-        <p class="text-slate-500 m-0">Atur field dan struktur formulir pendaftaran SPSMB.</p>
+        <h1 class="text-2xl font-bold text-slate-800 mb-1">Manajemen Form Pendaftaran Lengkap</h1>
+        <p class="text-slate-500 m-0">Atur seksi, field pertanyaan, dan berkas untuk Formulir Pendaftaran Lengkap SPSMB.</p>
       </div>
       
       <div class="flex items-center gap-3 w-full sm:w-auto flex-col sm:flex-row">

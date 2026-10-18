@@ -1,9 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getApplicationDetail, updateApplicationStatus } from '@/services/applicationService'
+import { getApplicationDetail, updateApplicationStatus, deleteApplication } from '@/services/applicationService'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseErrorState from '@/components/ui/BaseErrorState.vue'
+import BaseConfirmModal from '@/components/ui/BaseConfirmModal.vue'
+import ResendWhatsappModal from '@/components/admin/ResendWhatsappModal.vue'
+import { generateReceiptPdf, loadImageAsBase64 } from '@/utils/receiptPdf'
 import { formatDate } from '@/utils/date'
 import { formatPhoneDisplay } from '@/utils/phone'
 import jsPDF from 'jspdf'
@@ -17,6 +20,8 @@ const pendaftar = ref(null)
 const loading = ref(true)
 const error = ref('')
 const isGeneratingPdf = ref(false)
+const isResending = ref(false)
+const resendFeedback = ref({ type: '', text: '' })
 
 const fetchPendaftar = async () => {
   loading.value = true
@@ -34,12 +39,72 @@ const fetchPendaftar = async () => {
       
       nama: app.applicant.fullName,
       jenis_kelamin: app.applicant.gender === 'MALE' ? 'Laki-laki' : (app.applicant.gender === 'FEMALE' ? 'Perempuan' : '-'),
+      whatsapp: app.applicant.whatsapp,
+      whatsappStatus: app.application.whatsappStatus || 'UNSENT',
+      whatsappSentAt: app.application.whatsappSentAt || null,
+      whatsappError: app.application.whatsappError || null,
       lembaga_pendidikan: app.registration.formalInstitution?.name || app.registration.pondokInstitution?.name || app.application.registrationType
     }
   } catch (err) {
     error.value = 'Terjadi kesalahan sistem'
   } finally {
     loading.value = false
+  }
+}
+
+const showResendModal = ref(false)
+const isPrintingReceipt = ref(false)
+
+const handleOpenResend = () => {
+  showResendModal.value = true
+}
+
+const handleWhatsappSent = () => {
+  if (pendaftar.value) {
+    pendaftar.value.whatsappStatus = 'SENT'
+    pendaftar.value.whatsappSentAt = new Date().toISOString()
+    pendaftar.value.whatsappError = null
+  }
+  fetchPendaftar()
+}
+
+const handlePrintReceipt = async () => {
+  if (!pendaftar.value) return
+  isPrintingReceipt.value = true
+  try {
+    const raw = pendaftar.value.raw
+    const formalInst = raw?.registration?.formalInstitution
+    const pondokInst = raw?.registration?.pondokInstitution
+    await generateReceiptPdf({
+      registrationNumber: pendaftar.value.registrationNumber,
+      studentName: pendaftar.value.nama,
+      gender: pendaftar.value.jenis_kelamin,
+      whatsapp: pendaftar.value.whatsapp,
+      birthPlace: raw?.applicant?.birthPlace,
+      birthDate: raw?.applicant?.birthDate,
+      nik: raw?.applicant?.nik,
+      nisn: raw?.applicant?.nisn,
+      address: raw?.applicant?.address,
+      parentName: raw?.guardians?.[0]?.name || raw?.applicant?.parentName,
+      previousSchool: raw?.applicant?.previousSchool,
+      institution: { 
+        name: pendaftar.value.lembaga_pendidikan,
+        logo: formalInst?.logo || formalInst?.logoUrl || pondokInst?.logo || pondokInst?.logoUrl,
+        kop: formalInst?.kop || formalInst?.kopUrl || pondokInst?.kop || pondokInst?.kopUrl
+      },
+      pondok: { 
+        name: pondokInst?.name,
+        logo: pondokInst?.logo || pondokInst?.logoUrl,
+        kop: pondokInst?.kop || pondokInst?.kopUrl
+      },
+      createdAt: pendaftar.value.created_at,
+      status: pendaftar.value.status
+    })
+  } catch (err) {
+    console.error('Error generating receipt PDF:', err)
+    alert('Gagal membuat PDF Struk Pendaftaran: ' + (err.message || 'Terjadi kesalahan'))
+  } finally {
+    isPrintingReceipt.value = false
   }
 }
 
@@ -133,83 +198,159 @@ const handlePrint = async () => {
   try {
     isGeneratingPdf.value = true;
     
+    const raw = pendaftar.value?.raw;
+    const formalInst = raw?.registration?.formalInstitution;
+    const pondokInst = raw?.registration?.pondokInstitution;
+    const kopUrl = formalInst?.kop || formalInst?.kopUrl || pondokInst?.kop || pondokInst?.kopUrl || null;
+    const logoUrl = formalInst?.logo || formalInst?.logoUrl || pondokInst?.logo || pondokInst?.logoUrl || null;
+    const instTitle = formalInst?.name || pondokInst?.name || 'Pondok Pesantren Asy-Syadzili';
+
+    const [kopImg, logoImg] = await Promise.all([
+      loadImageAsBase64(kopUrl),
+      loadImageAsBase64(logoUrl)
+    ]);
+
     const doc = new jsPDF('p', 'mm', 'a4');
-    
-    // Header
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FORMULIR PENDAFTARAN SANTRI BARU', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(14);
-    doc.text('Pondok Pesantren Santri Pasir', 105, 28, { align: 'center' });
-    
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`No. Registrasi: ${pendaftar.value.registrationNumber}`, 105, 36, { align: 'center' });
-    
-    // Line separator
-    doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40);
-    
-    let currentY = 46;
-    
-    // Sections using autoTable
-    documentSections.value.forEach((section, index) => {
-      const title = `${getSectionLetter(index)}. ${section.title.toUpperCase()}`;
-      const bodyData = section.fields.map(f => [f.label, ':', f.value]);
+    let currentY = 36;
+
+    if (kopImg) {
+      // 1. Kop di bagian atas (margin top 8mm)
+      const availWidth = 182; // 210 - 28
+      const rawHeight = availWidth * (kopImg.height / kopImg.width);
+      const kopHeight = Math.min(36, Math.max(16, rawHeight));
+
+      doc.addImage(kopImg.dataUrl, 'PNG', 14, 8, availWidth, kopHeight);
       
+      // Jarak proporsional antara kop surat dengan header formulir
+      let headerY = 8 + kopHeight + 7;
+
+      doc.setFontSize(11.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('FORMULIR PENDAFTARAN SANTRI BARU', 105, headerY, { align: 'center' });
+      headerY += 5;
+
+      doc.setFontSize(9.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`No. Registrasi: ${pendaftar.value.registrationNumber}`, 105, headerY, { align: 'center' });
+      
+      // Jarak sebelum masuk ke seksi pertama
+      currentY = headerY + 7;
+    } else if (logoImg) {
+      // 2. Logo dengan margin proporsional (margin top 8mm)
+      doc.addImage(logoImg.dataUrl, 'PNG', 14, 8, 20, 20);
+
+      doc.setFontSize(12.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('FORMULIR PENDAFTARAN SANTRI BARU', 105 + 6, 13, { align: 'center' });
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text(instTitle, 105 + 6, 18.5, { align: 'center' });
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`No. Registrasi: ${pendaftar.value.registrationNumber}`, 105 + 6, 23.5, { align: 'center' });
+
+      doc.setLineWidth(0.4);
+      doc.setDrawColor(0, 0, 0);
+      doc.line(14, 29, 196, 29);
+      currentY = 36;
+    } else {
+      // 3. Fallback default header
+      doc.setFontSize(12.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('FORMULIR PENDAFTARAN SANTRI BARU', 105, 13, { align: 'center' });
+      
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text(instTitle, 105, 18.5, { align: 'center' });
+      
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`No. Registrasi: ${pendaftar.value.registrationNumber}`, 105, 23.5, { align: 'center' });
+      
+      doc.setLineWidth(0.4);
+      doc.setDrawColor(0, 0, 0);
+      doc.line(14, 29, 196, 29);
+      currentY = 36;
+    }
+    
+    // Poin kategori bold saja tanpa card, langsung tanpa enter jauh, dan tiap baris lurus sempurna
+    documentSections.value.forEach((section, index) => {
+      // Cek page break
+      if (currentY + 20 > 275) {
+        doc.addPage();
+        currentY = 16;
+      }
+
+      // Kategori: Cukup bold saja, tanpa card/box, jarak proporsional
+      const categoryTitle = `${getSectionLetter(index)}. ${section.title}`;
+      doc.setFontSize(9.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(categoryTitle, 14, currentY);
+      currentY += 4.5; // Jarak rapi dan nyaman ke baris data di bawahnya
+
+      // Tiap baris lurus: Col 0 (58mm), Col 1 (4mm ':'), Col 2 (120mm value)
+      const bodyData = section.fields.map(f => [
+        f.label,
+        ':',
+        String(f.value || '-')
+      ]);
+
       autoTable(doc, {
         startY: currentY,
-        head: [[title, '', '']],
         body: bodyData,
         theme: 'plain',
         styles: {
-          fontSize: 10,
-          cellPadding: 2,
-          font: 'helvetica'
-        },
-        headStyles: {
-          fontStyle: 'bold',
-          textColor: [0, 0, 0],
-          fontSize: 11,
-          lineWidth: { bottom: 0.5 },
-          lineColor: [0, 0, 0],
-          cellPadding: { top: 4, bottom: 2, left: 0, right: 0 }
+          fontSize: 8.5,
+          textColor: [0, 0, 0], // Pure Black
+          font: 'helvetica',
+          cellPadding: { top: 1.3, bottom: 1.3, left: 0, right: 1 },
+          overflow: 'linebreak'
         },
         columnStyles: {
-          0: { cellWidth: 50, fontStyle: 'normal' },
-          1: { cellWidth: 5, halign: 'center' },
-          2: { cellWidth: 'auto', fontStyle: 'bold' }
+          0: { cellWidth: 58, fontStyle: 'normal', textColor: [0, 0, 0] },
+          1: { cellWidth: 4, halign: 'center', fontStyle: 'normal', textColor: [0, 0, 0] },
+          2: { cellWidth: 120, fontStyle: 'normal', textColor: [0, 0, 0] }
         },
         margin: { left: 14, right: 14 }
       });
-      
-      currentY = doc.lastAutoTable.finalY + 4;
+
+      // Jarak antar seksi yang nyaman (5mm)
+      currentY = doc.lastAutoTable.finalY + 5;
     });
     
     // Check if we need a new page for signatures
     if (currentY > 240) {
       doc.addPage();
-      currentY = 20;
+      currentY = 15;
     }
     
-    currentY += 15;
+    currentY += 8;
     const today = formatDate(new Date().toISOString()).split(',')[0];
     
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
     
     // Signature (Panitia)
     doc.text('Mengetahui,', 45, currentY, { align: 'center' });
-    doc.text('Panitia Penerimaan', 45, currentY + 5, { align: 'center' });
-    doc.text('( ........................................ )', 45, currentY + 30, { align: 'center' });
+    doc.text('Panitia Penerimaan', 45, currentY + 4, { align: 'center' });
+    doc.text('( ........................................ )', 45, currentY + 25, { align: 'center' });
     
     // Signature (Pendaftar)
-    doc.text(`Malang, ${today}`, 165, currentY - 5, { align: 'center' });
+    doc.text(`Malang, ${today}`, 165, currentY - 4, { align: 'center' });
     doc.text('Pendaftar,', 165, currentY, { align: 'center' });
     
     doc.setFont('helvetica', 'bold');
-    doc.text(pendaftar.value.nama || '( ........................................ )', 165, currentY + 30, { align: 'center' });
+    doc.text(pendaftar.value.nama || '( ........................................ )', 165, currentY + 25, { align: 'center' });
     
     const fileName = `Formulir_${pendaftar.value.registrationNumber}.pdf`;
     doc.save(fileName);
@@ -231,6 +372,22 @@ const handleConfirmSantri = async () => {
     alert('Gagal mengkonfirmasi santri');
   }
 }
+
+const showDeleteModal = ref(false)
+const isDeleting = ref(false)
+
+const handleDeleteApplicant = async () => {
+  isDeleting.value = true
+  try {
+    await deleteApplication(pendaftarId)
+    showDeleteModal.value = false
+    router.push('/admin/pendaftar')
+  } catch (err) {
+    alert(err?.response?.data?.message || err?.message || 'Gagal menghapus data pendaftar')
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -249,10 +406,55 @@ const handleConfirmSantri = async () => {
       <!-- Action Bar -->
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 print:hidden">
         <div>
-          <h4 class="text-lg font-bold text-slate-800 mb-1">Detail Pendaftar</h4>
-          <p class="text-slate-500 text-sm m-0">Informasi pendaftaran santri baru</p>
+          <div class="flex items-center gap-3">
+            <h4 class="text-lg font-bold text-slate-800 mb-0">Detail Pendaftar</h4>
+            <span 
+              v-if="pendaftar.whatsappStatus === 'SENT'" 
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium"
+              :title="pendaftar.whatsappSentAt ? 'Terkirim: ' + formatDate(pendaftar.whatsappSentAt) : 'Pesan WhatsApp terkirim'"
+            >
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+              WA Terkirim
+            </span>
+            <span 
+              v-else-if="pendaftar.whatsappStatus === 'FAILED'" 
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-medium"
+              :title="pendaftar.whatsappError || 'Pengiriman pesan WhatsApp gagal'"
+            >
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>
+              WA Gagal
+            </span>
+            <span 
+              v-else 
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-xs font-medium"
+            >
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></span>
+              WA Belum Terkirim
+            </span>
+          </div>
+          <p class="text-slate-500 text-sm mt-1 mb-0">Informasi pendaftaran santri baru</p>
         </div>
         <div class="flex flex-wrap gap-2 mt-4 sm:mt-0">
+          <button 
+            @click="handleOpenResend" 
+            class="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm text-sm font-medium"
+            :title="pendaftar.whatsappStatus === 'SENT' ? 'Kirim Ulang WhatsApp & Berkas' : 'Kirim WhatsApp & Berkas'"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-repeat mr-2"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+            {{ pendaftar.whatsappStatus === 'SENT' ? 'Resend WhatsApp' : 'Kirim WhatsApp' }}
+          </button>
+
+          <button 
+            @click="handlePrintReceipt" 
+            :disabled="isPrintingReceipt" 
+            class="inline-flex items-center px-3.5 py-2 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg hover:bg-emerald-100 transition-colors shadow-2xs text-sm font-medium disabled:opacity-50"
+            title="Cetak Tanda Bukti / Struk Pendaftaran Santri Baru"
+          >
+            <svg v-if="isPrintingReceipt" class="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-800" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-printer mr-2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+            <span>{{ isPrintingReceipt ? 'Membuat PDF...' : 'Cetak Struk' }}</span>
+          </button>
+
           <button @click="handlePrint" :disabled="isGeneratingPdf" class="inline-flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
             <template v-if="isGeneratingPdf">
               <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -260,7 +462,7 @@ const handleConfirmSantri = async () => {
             </template>
             <template v-else>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text mr-2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-              Download PDF
+              Cetak Form Lengkap
             </template>
           </button>
           
@@ -269,11 +471,32 @@ const handleConfirmSantri = async () => {
             Konfirmasi Santri
           </button>
           
+          <button 
+            @click="showDeleteModal = true" 
+            class="inline-flex items-center px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition-colors shadow-xs text-sm font-medium"
+            title="Hapus Data Pendaftar"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2 mr-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+            Hapus Pendaftar
+          </button>
+
           <router-link to="/admin/pendaftar" class="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors shadow-sm text-sm font-medium">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left mr-2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
             Kembali
           </router-link>
         </div>
+      </div>
+
+      <!-- Feedback Alert -->
+      <div v-if="resendFeedback.text" :class="[
+        'p-4 rounded-xl border text-sm flex items-center justify-between',
+        resendFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
+      ]">
+        <div class="flex items-center space-x-2">
+          <span class="font-bold text-base">{{ resendFeedback.type === 'success' ? '✓' : '✕' }}</span>
+          <span>{{ resendFeedback.text }}</span>
+        </div>
+        <button @click="resendFeedback.text = ''" class="text-xs font-bold hover:underline ml-4">Tutup</button>
       </div>
 
       <!-- Document Container -->
@@ -328,6 +551,41 @@ const handleConfirmSantri = async () => {
         
       </div>
     </div>
+
+    <!-- Modal Resend WhatsApp -->
+    <ResendWhatsappModal
+      :open="showResendModal"
+      :applicant-id="pendaftarId"
+      :applicant="pendaftar"
+      @close="showResendModal = false"
+      @sent="handleWhatsappSent"
+    />
+
+    <!-- Modal Konfirmasi Hapus Pendaftar -->
+    <BaseConfirmModal 
+      :open="showDeleteModal"
+      title="Hapus Data Pendaftar"
+      confirm-text="Ya, Hapus Pendaftar"
+      cancel-text="Batal"
+      confirm-variant="danger"
+      :loading="isDeleting"
+      @close="showDeleteModal = false"
+      @confirm="handleDeleteApplicant"
+    >
+      <p class="text-sm text-slate-600 mb-2">
+        Apakah Anda yakin ingin menghapus data pendaftar berikut?
+      </p>
+      <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-sm space-y-1.5 my-3">
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">No. Pendaftaran:</span> <strong class="text-slate-800 font-mono">{{ pendaftar?.registrationNumber }}</strong></div>
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">Nama:</span> <strong class="text-slate-800">{{ pendaftar?.nama }}</strong></div>
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">Lembaga:</span> <span class="text-slate-700">{{ pendaftar?.lembaga_pendidikan }}</span></div>
+        <div class="flex items-center justify-between"><span class="text-slate-500 font-medium">Status:</span> <span class="text-slate-700">{{ pendaftar?.status }}</span></div>
+      </div>
+      <p class="text-xs text-rose-600 font-medium m-0 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle mr-1.5 inline-block shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17"/></svg>
+        Semua berkas lampiran dan data formulir pendaftar ini akan dihapus secara permanen.
+      </p>
+    </BaseConfirmModal>
   </div>
 </template>
 

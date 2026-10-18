@@ -86,7 +86,7 @@ const printPDF = async () => {
     const margin = 20
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
-    let yPos = 20
+    let yPos = 12
     
     const checkPageBreak = (neededSpace) => {
       if (yPos + neededSpace > pageHeight - margin) {
@@ -98,70 +98,65 @@ const printPDF = async () => {
     }
     
     // Header
-    pdf.setFontSize(16)
+    pdf.setFontSize(13)
     pdf.setFont('helvetica', 'bold')
-    pdf.text('BUKTI PENDAFTARAN LENGKAP SANTRI BARU', pageWidth / 2, yPos, { align: 'center' })
-    yPos += 8
+    pdf.setTextColor(0, 0, 0)
+    pdf.text('BUKTI FORM PENDAFTARAN LENGKAP SANTRI BARU', pageWidth / 2, yPos, { align: 'center' })
+    yPos += 5.5
     
-    pdf.setFontSize(14)
+    pdf.setFontSize(11)
     pdf.text('PONDOK PESANTREN ASY-SYADZILI', pageWidth / 2, yPos, { align: 'center' })
-    yPos += 6
+    yPos += 5
     
-    pdf.setFontSize(10)
+    pdf.setFontSize(9)
     pdf.setFont('helvetica', 'normal')
     pdf.text(`Tahun Ajaran ${formData.value.application.academicYear || 'Berjalan'}`, pageWidth / 2, yPos, { align: 'center' })
-    yPos += 10
+    yPos += 6
     
-    // Line separator
-    pdf.setLineWidth(0.5)
+    // Header separator
+    pdf.setLineWidth(0.4)
+    pdf.setDrawColor(0, 0, 0)
     pdf.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 10
+    yPos += 6
     
     // Helper function to draw rows
     const drawRow = (label, value) => {
-      pdf.setFontSize(10)
+      pdf.setFontSize(9)
       
       // Measure label lines
-      pdf.setFont('helvetica', 'bold')
-      const splitLabel = pdf.splitTextToSize(String(label), 65)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setTextColor(0, 0, 0)
+      const splitLabel = pdf.splitTextToSize(String(label), 58)
       
       // Measure value lines
-      pdf.setFont('helvetica', 'normal')
-      const splitValue = pdf.splitTextToSize(String(value || '-'), pageWidth - margin - 75)
+      const splitValue = pdf.splitTextToSize(String(value || '-'), pageWidth - margin - 64)
       
       const maxLines = Math.max(splitLabel.length, splitValue.length)
-      const requiredHeight = (maxLines * 5) + 3
+      const requiredHeight = (maxLines * 4.2) + 1.5
       
-      checkPageBreak(requiredHeight + 5)
+      checkPageBreak(requiredHeight + 3)
       
       // Draw Label
-      pdf.setFont('helvetica', 'bold')
       pdf.text(splitLabel, margin, yPos)
       
+      // Draw Colon
+      pdf.text(':', margin + 58, yPos)
+      
       // Draw Value
-      pdf.setFont('helvetica', 'normal')
-      pdf.text(splitValue, margin + 70, yPos)
+      pdf.text(splitValue, margin + 62, yPos)
       
       yPos += requiredHeight
     }
     
-    // Helper function for Section Titles
+    // Helper function for Section Titles (Bold hitam tanpa card, langsung tanpa enter jauh)
     const drawSectionTitle = (title) => {
       checkPageBreak(15)
-      yPos += 5
+      yPos += 4
       pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(12)
-      pdf.setTextColor(26, 77, 46) // Dark green
-      pdf.text(title, margin, yPos)
-      yPos += 2
-      pdf.setLineWidth(0.2)
-      pdf.setDrawColor(26, 77, 46)
-      pdf.line(margin, yPos, pageWidth - margin, yPos)
-      
-      // Reset colors
+      pdf.setFontSize(9.5)
       pdf.setTextColor(0, 0, 0)
-      pdf.setDrawColor(0, 0, 0)
-      yPos += 8
+      pdf.text(title, margin, yPos)
+      yPos += 4
     }
 
     // 1. Info Pendaftaran
@@ -202,7 +197,7 @@ const printPDF = async () => {
       pdf.setPage(i);
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'italic');
-      pdf.setTextColor(100, 100, 100);
+      pdf.setTextColor(0, 0, 0);
       pdf.text(
         `Dicetak pada: ${new Date().toLocaleString('id-ID')} | Halaman ${i} dari ${pageCount}`,
         margin,
@@ -240,10 +235,10 @@ const printPDF = async () => {
             <polyline points="22 4 12 14.01 9 11.01"/>
           </svg>
         </div>
-        <h1 class="mainTitle mb-2">Pendaftaran Berhasil Dikirim</h1>
+        <h1 class="mainTitle mb-2">Form Pendaftaran Lengkap Berhasil Dikirim</h1>
         <p class="text-emerald-50 text-sm md:text-base leading-relaxed">
-          Terima kasih. Data pendaftaran Anda telah berhasil dikirim kepada panitia SPSMB. 
-          Simpan nomor pendaftaran dan bukti pendaftaran untuk keperluan berikutnya.
+          Terima kasih. Data Form Pendaftaran Lengkap dan berkas Anda telah berhasil dikirim kepada panitia SPSMB. 
+          Simpan nomor pendaftaran dan bukti pendaftaran lengkap ini untuk keperluan verifikasi.
         </p>
       </div>
 
@@ -251,7 +246,7 @@ const printPDF = async () => {
       <div id="printArea" class="bg-white text-slate-800 rounded-2xl shadow-xl overflow-hidden">
         <!-- Print Header -->
         <div class="bg-slate-50 border-b border-slate-200 p-6 md:p-8 text-center">
-          <h2 class="text-2xl font-bold text-slate-800 mb-1 uppercase tracking-wide">Bukti Pendaftaran SPSMB</h2>
+          <h2 class="text-2xl font-bold text-slate-800 mb-1 uppercase tracking-wide">Bukti Form Pendaftaran Lengkap SPSMB</h2>
           <p class="text-slate-500">Tahun Ajaran {{ formData.application.academicYear || 'Berjalan' }}</p>
         </div>
 
@@ -338,7 +333,7 @@ const printPDF = async () => {
               <button @click="printPDF" :disabled="isGeneratingPdf" class="px-6 py-3 font-bold text-white bg-[#1A4D2E] rounded-lg hover:bg-[#153e25] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
                 <span v-if="isGeneratingPdf" class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
                 <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                {{ isGeneratingPdf ? 'Mempersiapkan PDF...' : 'Download Bukti Pendaftaran' }}
+                {{ isGeneratingPdf ? 'Mempersiapkan PDF...' : 'Download Bukti Form Pendaftaran Lengkap' }}
               </button>
             </div>
           </div>
