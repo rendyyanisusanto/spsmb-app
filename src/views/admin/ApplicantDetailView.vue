@@ -6,6 +6,7 @@ import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseErrorState from '@/components/ui/BaseErrorState.vue'
 import BaseConfirmModal from '@/components/ui/BaseConfirmModal.vue'
 import ResendWhatsappModal from '@/components/admin/ResendWhatsappModal.vue'
+import ApplicantEditModal from '@/components/admin/ApplicantEditModal.vue'
 import { generateReceiptPdf, loadImageAsBase64 } from '@/utils/receiptPdf'
 import { formatDate } from '@/utils/date'
 import { formatPhoneDisplay } from '@/utils/phone'
@@ -53,7 +54,14 @@ const fetchPendaftar = async () => {
 }
 
 const showResendModal = ref(false)
+const showEditModal = ref(false)
 const isPrintingReceipt = ref(false)
+
+const handleApplicantUpdated = () => {
+  showEditModal.value = false
+  resendFeedback.value = { type: 'success', text: 'Data pendaftar berhasil diperbarui.' }
+  fetchPendaftar()
+}
 
 const handleOpenResend = () => {
   showResendModal.value = true
@@ -470,6 +478,15 @@ const handleDeleteApplicant = async () => {
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-check mr-2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
             Konfirmasi Santri
           </button>
+
+          <button 
+            @click="showEditModal = true" 
+            class="inline-flex items-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors shadow-sm text-sm font-medium"
+            title="Edit Data Pendaftar"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-edit-3 mr-2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            Edit Data
+          </button>
           
           <button 
             @click="showDeleteModal = true" 
@@ -559,6 +576,14 @@ const handleDeleteApplicant = async () => {
       :applicant="pendaftar"
       @close="showResendModal = false"
       @sent="handleWhatsappSent"
+    />
+
+    <!-- Modal Edit Pendaftar -->
+    <ApplicantEditModal
+      :open="showEditModal"
+      :applicant-id="pendaftarId"
+      @close="showEditModal = false"
+      @saved="handleApplicantUpdated"
     />
 
     <!-- Modal Konfirmasi Hapus Pendaftar -->

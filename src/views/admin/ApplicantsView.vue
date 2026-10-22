@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { getApplications, exportApplications, deleteApplication } from '@/services/applicationService'
+import * as institutionService from '@/services/institutionService'
 import * as XLSX from 'xlsx'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseEmptyState from '@/components/ui/BaseEmptyState.vue'
@@ -9,6 +10,7 @@ import BaseErrorState from '@/components/ui/BaseErrorState.vue'
 import BaseConfirmModal from '@/components/ui/BaseConfirmModal.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import ResendWhatsappModal from '@/components/admin/ResendWhatsappModal.vue'
+import ApplicantEditModal from '@/components/admin/ApplicantEditModal.vue'
 import { formatDate } from '@/utils/date'
 import { formatPhoneDisplay } from '@/utils/phone'
 const { user } = useAuth()
@@ -19,6 +21,7 @@ const isExporting = ref(false)
 const applicants = ref([])
 const pagination = ref({ page: 1, limit: 10, total: 0, totalPages: 0 })
 const stats = ref({ total: 0, sudahSantri: 0, menunggu: 0, persentase: 0 })
+const dynamicInstitutions = ref([])
 
 // State for WhatsApp Resend
 const resendingId = ref(null)
@@ -33,11 +36,74 @@ const applicantToDelete = ref(null)
 const isDeleting = ref(false)
 const notification = ref({ show: false, type: 'success', message: '' })
 
+// State for Edit Applicant
+const showEditModal = ref(false)
+const selectedEditApplicant = ref(null)
+
+const openEditModal = (applicant) => {
+  selectedEditApplicant.value = applicant
+  showEditModal.value = true
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  selectedEditApplicant.value = null
+}
+
+const handleApplicantUpdated = async () => {
+  notification.value = {
+    show: true,
+    type: 'success',
+    message: 'Data pendaftar berhasil diperbarui.'
+  }
+  setTimeout(() => {
+    notification.value.show = false
+  }, 4000)
+  await fetchApplicants()
+}
+
 const filters = ref({
   search: '',
-  lembaga: user.value?.primaryRole === 'ADMIN_SPSMB' ? user.value.institutions?.[0]?.name : '',
+  lembaga: user.value?.primaryRole === 'ADMIN_SPSMB' ? (user.value.institutions?.[0]?.name || '') : '',
   limit: 10,
   page: 1
+})
+
+watch(() => user.value, (newVal) => {
+  if (newVal?.primaryRole === 'ADMIN_SPSMB' && !filters.value.lembaga) {
+    filters.value.lembaga = newVal.institutions?.[0]?.name || ''
+    fetchApplicants()
+  }
+})
+
+const fetchInstitutionList = async () => {
+  try {
+    const res = await institutionService.getPublicInstitutions()
+    if (res?.data && Array.isArray(res.data)) {
+      dynamicInstitutions.value = res.data
+    }
+  } catch (e) {
+    console.error('Gagal memuat data lembaga:', e)
+  }
+}
+
+const lembagaOptions = computed(() => {
+  const options = [{ value: '', label: 'Semua Lembaga' }]
+  if (dynamicInstitutions.value.length > 0) {
+    dynamicInstitutions.value.forEach(inst => {
+      options.push({ value: inst.name, label: inst.name })
+    })
+  } else {
+    options.push(
+      { value: 'SMP IT Asy-Syadzili', label: 'SMP IT Asy-Syadzili' },
+      { value: 'SMA IT Asy-Syadzili', label: 'SMA IT Asy-Syadzili' },
+      { value: 'SMK IT Asy-Syadzili', label: 'SMK IT Asy-Syadzili' }
+    )
+  }
+  if (!options.some(o => o.value === 'Non Formal')) {
+    options.push({ value: 'Non Formal', label: 'Non Formal' })
+  }
+  return options
 })
 
 const fetchApplicants = async () => {
@@ -48,6 +114,10 @@ const fetchApplicants = async () => {
       page: filters.value.page,
       limit: filters.value.limit,
       search: filters.value.search
+    }
+
+    if (filters.value.lembaga) {
+      apiParams.lembaga = filters.value.lembaga
     }
 
     const res = await getApplications(apiParams)
@@ -82,7 +152,8 @@ const fetchApplicants = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchInstitutionList()
   fetchApplicants()
 })
 
@@ -91,8 +162,10 @@ const handleExport = async () => {
     isExporting.value = true;
     const apiParams = {
       search: filters.value.search
-      // If backend supports lembaga mapping, it would go here
     };
+    if (filters.value.lembaga) {
+      apiParams.lembaga = filters.value.lembaga;
+    }
     
     const exportData = await exportApplications(apiParams);
     
@@ -123,7 +196,7 @@ const handleFilterChange = (key, value) => {
 const clearFilters = () => {
   filters.value = {
     search: '',
-    lembaga: user.value?.primaryRole === 'ADMIN_SPSMB' ? user.value.institutions?.[0]?.name : '',
+    lembaga: user.value?.primaryRole === 'ADMIN_SPSMB' ? (user.value.institutions?.[0]?.name || '') : '',
     limit: 10,
     page: 1
   }
@@ -156,14 +229,6 @@ const generatePageNumbers = () => {
   if (total > 1 && !pages.includes(total)) pages.push(total)
   return pages
 }
-
-const lembagaOptions = [
-  { value: '', label: 'Semua Lembaga' },
-  { value: 'SMP IT Asy-Syadzili', label: 'SMP IT Asy-Syadzili' },
-  { value: 'SMA IT Asy-Syadzili', label: 'SMA IT Asy-Syadzili' },
-  { value: 'SMK IT Asy-Syadzili', label: 'SMK IT Asy-Syadzili' },
-  { value: 'Non Formal', label: 'Non Formal' }
-]
 
 const openResendModal = (applicant) => {
   selectedApplicant.value = applicant
@@ -255,10 +320,6 @@ const handleDeleteApplicant = async () => {
             Export Excel
           </template>
         </button>
-        <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm inline-flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-circle mr-2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-          Tambah Pendaftar
-        </button>
       </div>
     </div>
 
@@ -329,7 +390,16 @@ const handleDeleteApplicant = async () => {
             @change="e => handleFilterChange('lembaga', e.target.value)"
             :disabled="user?.primaryRole === 'ADMIN_SPSMB'"
           >
-            <option v-for="opt in lembagaOptions" :key="opt.value" :value="opt.value" v-show="user?.primaryRole !== 'ADMIN_SPSMB' || opt.value === user?.institutions?.[0]?.name">{{ opt.label }}</option>
+            <template v-if="user?.primaryRole === 'ADMIN_SPSMB'">
+              <option :value="user?.institutions?.[0]?.name || ''">
+                {{ user?.institutions?.[0]?.name || 'Lembaga Anda' }}
+              </option>
+            </template>
+            <template v-else>
+              <option v-for="opt in lembagaOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </template>
           </select>
         </div>
 
@@ -469,6 +539,16 @@ const handleDeleteApplicant = async () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                   </router-link>
                   <button 
+                    @click="openEditModal(data)" 
+                    class="p-1.5 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded transition-colors" 
+                    title="Edit Data Pendaftar"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-edit-3">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                    </svg>
+                  </button>
+                  <button 
                     @click="openResendModal(data)"
                     :disabled="resendingId === data.id"
                     class="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
@@ -538,6 +618,14 @@ const handleDeleteApplicant = async () => {
       :applicant="selectedApplicant"
       @close="closeResendModal"
       @sent="handleWhatsappSent"
+    />
+
+    <!-- Modal Edit Pendaftar -->
+    <ApplicantEditModal
+      :open="showEditModal"
+      :applicant-id="selectedEditApplicant?.id"
+      @close="closeEditModal"
+      @saved="handleApplicantUpdated"
     />
 
     <!-- Modal Konfirmasi Hapus Pendaftar -->

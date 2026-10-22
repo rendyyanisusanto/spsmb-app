@@ -31,6 +31,11 @@ export const getApplicationDetail = async (id) => {
   return response.data;
 };
 
+export const getApplicationForm = async (id) => {
+  const response = await api.get(`/applications/${id}/form`);
+  return response.data;
+};
+
 export const getApplicationStatusHistory = async (id) => {
   const response = await api.get(`/applications/${id}/status-history`);
   return response.data;
@@ -39,6 +44,11 @@ export const getApplicationStatusHistory = async (id) => {
 export const updateApplicationStatus = async (id, status) => {
   const response = await api.patch(`/applications/${id}/status`, { status });
   return response.data;
+};
+
+export const updateApplication = async (id, data) => {
+  const response = await api.put(`/applications/${id}`, data);
+  return response.data || response;
 };
 
 export const resendApplicationWhatsapp = async (id, payload = {}) => {

@@ -52,6 +52,16 @@ const router = createRouter({
           component: () => import('@/views/public/PlaceholderView.vue')
         },
         {
+          path: 'faq',
+          name: 'public-faq',
+          component: () => import('@/views/public/GlobalFaqView.vue')
+        },
+        {
+          path: ':slug(ppsq-1|ppsq-2|smp|sma|smk)',
+          name: 'public-institution-landing',
+          component: () => import('@/views/public/InstitutionLandingView.vue')
+        },
+        {
           path: ':pathMatch(.*)*',
           name: 'public-not-found',
           component: () => import('@/views/public/NotFoundView.vue')
@@ -88,10 +98,64 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
         },
         {
+          path: 'pendaftar/:id/edit',
+          name: 'admin-applicant-edit',
+          component: () => import('@/views/admin/ApplicantEditView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+        },
+        {
+          path: 'crm/leads',
+          name: 'admin-crm-leads',
+          component: () => import('@/views/admin/crm/LeadListView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'crm/leads/:id',
+          name: 'admin-crm-lead-detail',
+          component: () => import('@/views/admin/crm/LeadDetailView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'crm/templates',
+          name: 'admin-crm-templates',
+          component: () => import('@/views/admin/crm/TemplateListView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'konfirmasi',
+          name: 'admin-confirmation-list',
+          component: () => import('@/views/admin/confirmation/ConfirmationListView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'konfirmasi/:applicationId',
+          name: 'admin-confirmation-process',
+          component: () => import('@/views/admin/confirmation/ConfirmationProcessView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'konfirmasi/siswa-resmi',
+          name: 'admin-confirmation-official-students',
+          component: () => import('@/views/admin/confirmation/OfficialStudentsListView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'konfirmasi/jalur',
+          name: 'admin-confirmation-tracks',
+          component: () => import('@/views/admin/confirmation/ConfirmationTracksView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+        },
+        {
+          path: 'konfirmasi/tagihan',
+          name: 'admin-confirmation-fee-components',
+          component: () => import('@/views/admin/confirmation/ConfirmationFeeComponentsView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+        },
+        {
           path: 'lembaga',
           name: 'admin-institution',
           component: () => import('@/views/admin/InstitutionView.vue'),
-          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+          meta: { roles: ['SUPER_ADMIN'] }
         },
         {
           path: 'periode',
@@ -103,7 +167,7 @@ const router = createRouter({
           path: 'program',
           name: 'admin-program',
           component: () => import('@/views/admin/ProgramView.vue'),
-          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+          meta: { roles: ['SUPER_ADMIN'] }
         },
         {
           path: 'form',
@@ -121,6 +185,12 @@ const router = createRouter({
           path: 'persyaratan/pendaftar/:id',
           name: 'admin-requirement-applicant-detail',
           component: () => import('@/views/admin/RequirementsApplicantDetailView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+        },
+        {
+          path: 'faq',
+          name: 'admin-faq',
+          component: () => import('@/views/admin/FaqManagementView.vue'),
           meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
         },
         {

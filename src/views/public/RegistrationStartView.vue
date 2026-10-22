@@ -1,11 +1,12 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import * as settingService from '@/services/settingService'
 import * as institutionService from '@/services/institutionService'
 import publicRegistrationService from '@/services/publicRegistrationService'
 
 const router = useRouter()
+const route = useRoute()
 const settings = ref(null)
 const loading = ref(true)
 const submitting = ref(false)
@@ -29,6 +30,20 @@ onMounted(async () => {
           .filter(i => i.institution_type !== 'PONDOK')
           .map(i => ({ value: i.id, label: i.name, type: i.institution_type }))
       ]
+
+      // Pre-select institution from query params if coming from landing page
+      if (route.query.lembaga) {
+        const found = lembagaOptions.value.find(l => String(l.value) === String(route.query.lembaga))
+        if (found) {
+          form.lembaga = found.value
+        }
+      } else if (route.query.type === 'NON_FORMAL') {
+        form.lembaga = 'NON_FORMAL'
+      }
+
+      if (route.query.gender && ['L', 'P'].includes(route.query.gender)) {
+        form.jenisKelamin = route.query.gender
+      }
     }
     if (infoRes && infoRes.success) {
       sumberInfoOptions.value = infoRes.data.map(i => ({ value: i.id, label: i.name }))
