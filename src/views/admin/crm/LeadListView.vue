@@ -143,13 +143,12 @@ const filters = ref({
   limit: 10
 })
 
-// Statistics computed
-const stats = computed(() => {
-  const total = pagination.value.total
-  const newCount = leads.value.filter(l => l.status === 'NEW').length
-  const inProgress = leads.value.filter(l => ['CONTACTED', 'INTERESTED', 'FOLLOW_UP', 'READY_TO_REGISTER'].includes(l.status)).length
-  const converted = leads.value.filter(l => l.status === 'CONVERTED').length
-  return { total, newCount, inProgress, converted }
+// Statistics state (keseluruhan data, bukan hanya per halaman)
+const stats = ref({
+  total: 0,
+  newCount: 0,
+  inProgress: 0,
+  converted: 0
 })
 
 // Lead form modal state (Add / Edit)
@@ -240,6 +239,16 @@ const fetchLeads = async () => {
     if (res.success) {
       leads.value = res.data
       pagination.value = res.meta
+      if (res.meta?.stats) {
+        stats.value = res.meta.stats
+      } else {
+        stats.value = {
+          total: res.meta?.total || 0,
+          newCount: leads.value.filter(l => l.status === 'NEW').length,
+          inProgress: leads.value.filter(l => ['CONTACTED', 'INTERESTED', 'FOLLOW_UP', 'READY_TO_REGISTER'].includes(l.status)).length,
+          converted: leads.value.filter(l => l.status === 'CONVERTED').length
+        }
+      }
     } else {
       error.value = res.message || 'Gagal memuat data lead'
     }

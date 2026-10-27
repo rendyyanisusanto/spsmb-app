@@ -53,6 +53,19 @@ export const getLeadOfficers = async () => {
   return response.data;
 };
 
+export const getLeadStats = async (params = {}) => {
+  const query = new URLSearchParams();
+
+  Object.keys(params).forEach(key => {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      query.append(key, params[key]);
+    }
+  });
+
+  const response = await api.get(`/crm/leads/stats?${query.toString()}`);
+  return response.data;
+};
+
 export const getLeadActivities = async (id) => {
   const response = await api.get(`/crm/leads/${id}/activities`);
   return response.data;
