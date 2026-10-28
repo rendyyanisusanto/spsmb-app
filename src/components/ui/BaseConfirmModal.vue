@@ -1,16 +1,16 @@
 <template>
-  <BaseModal :open="open" :title="title" @close="handleClose">
-    <div class="py-4 text-gray-600">
+  <BaseModal :open="computedOpen" :title="title" @close="handleClose">
+    <div class="py-4 text-slate-600 dark:text-slate-300">
       <slot>
         {{ message }}
       </slot>
     </div>
     <template #footer>
       <div class="flex justify-end space-x-3">
-        <BaseButton variant="outline" @click="handleClose" :disabled="loading">
+        <BaseButton variant="outline" @click="handleClose" :disabled="computedLoading">
           {{ cancelText }}
         </BaseButton>
-        <BaseButton :variant="confirmVariant" @click="handleConfirm" :loading="loading">
+        <BaseButton :variant="confirmVariant" @click="handleConfirm" :loading="computedLoading">
           {{ confirmText }}
         </BaseButton>
       </div>
@@ -19,6 +19,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import BaseModal from './BaseModal.vue'
 import BaseButton from './BaseButton.vue'
 
@@ -26,6 +27,10 @@ const props = defineProps({
   open: {
     type: Boolean,
     default: false
+  },
+  isOpen: {
+    type: Boolean,
+    default: undefined
   },
   title: {
     type: String,
@@ -50,13 +55,20 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  isLoading: {
+    type: Boolean,
+    default: undefined
   }
 })
 
 const emit = defineEmits(['close', 'confirm'])
 
+const computedOpen = computed(() => (props.isOpen !== undefined ? props.isOpen : props.open))
+const computedLoading = computed(() => (props.isLoading !== undefined ? props.isLoading : props.loading))
+
 const handleClose = () => {
-  if (props.loading) return
+  if (computedLoading.value) return
   emit('close')
 }
 

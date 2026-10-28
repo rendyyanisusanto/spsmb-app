@@ -24,6 +24,7 @@ import {
   LogOut,
   Menu,
   Contact,
+  School,
   UserCheck,
   CheckSquare,
   CreditCard,
@@ -147,9 +148,30 @@ const menuSections = [
             roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS']
           }
         ]
+      },
+      {
+        icon: School,
+        label: 'Promosi Sekolah',
+        roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'],
+        children: [
+          {
+            icon: School,
+            label: 'Target Sekolah',
+            href: '/admin/crm/schools',
+            roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS']
+          },
+          {
+            icon: FileText,
+            label: 'Pengaturan Surat',
+            href: '/admin/crm/schools/letter-settings',
+            roles: ['SUPER_ADMIN', 'ADMIN_SPSMB']
+          }
+        ]
       }
     ]
   },
+  // Sementara disembunyikan:
+  /*
   {
     title: 'Konfirmasi Siswa',
     items: [
@@ -186,6 +208,7 @@ const menuSections = [
       }
     ]
   },
+  */
   {
     title: 'Data & Sistem',
     items: [
@@ -285,6 +308,10 @@ const isItemActive = (href) => {
       !route.path.startsWith('/admin/konfirmasi/jalur') &&
       !route.path.startsWith('/admin/konfirmasi/tagihan')
   }
+  if (href === '/admin/crm/schools') {
+    return (route.path === '/admin/crm/schools' || route.path.startsWith('/admin/crm/schools/')) &&
+      !route.path.startsWith('/admin/crm/schools/letter-settings')
+  }
   return route.path.startsWith(href + '/')
 }
 
@@ -321,6 +348,8 @@ const getPageTitle = computed(() => {
   if (route.path.includes('/pendaftar/') && route.path.endsWith('/edit')) return 'Edit Pendaftar'
   if (route.path.includes('/pendaftar/')) return 'Detail Pendaftar'
   if (route.path.includes('/crm/leads/')) return 'Detail Lead'
+  if (route.path.includes('/crm/schools/letter-settings')) return 'Pengaturan Surat Presentasi'
+  if (route.path.includes('/crm/schools/')) return 'Detail Target Sekolah'
   if (route.path.includes('/persyaratan/pendaftar/')) return 'Verifikasi Dokumen Pendaftar'
 
   // Exact match first

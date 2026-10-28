@@ -287,7 +287,30 @@ const resetFilters = () => {
   fetchLeads()
 }
 
+const displayedPages = computed(() => {
+  const total = Number(pagination.value.totalPages) || 1
+  const current = Number(pagination.value.page) || 1
+
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+
+  // Current near start
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total]
+  }
+
+  // Current near end
+  if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  }
+
+  // Current in middle
+  return [1, '...', current - 1, current, current + 1, '...', total]
+})
+
 const goToPage = (p) => {
+  if (typeof p !== 'number') return
   if (p < 1 || p > pagination.value.totalPages) return
   filters.value.page = p
   fetchLeads()
@@ -1099,25 +1122,34 @@ onMounted(async () => {
           <button
             @click="goToPage(pagination.page - 1)"
             :disabled="pagination.page <= 1"
-            class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Halaman Sebelumnya"
+            class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft class="w-4 h-4" />
           </button>
           
-          <button
-            v-for="p in Math.min(5, pagination.totalPages || 1)"
-            :key="p"
-            @click="goToPage(p)"
-            class="px-3 py-1 rounded-lg text-xs font-medium border"
-            :class="pagination.page === p ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
-          >
-            {{ p }}
-          </button>
+          <template v-for="(p, idx) in displayedPages" :key="idx">
+            <span
+              v-if="p === '...'"
+              class="px-2 py-1 text-xs text-slate-400 select-none font-semibold"
+            >
+              ...
+            </span>
+            <button
+              v-else
+              @click="goToPage(p)"
+              class="min-w-[32px] px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors"
+              :class="pagination.page === p ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
+            >
+              {{ p }}
+            </button>
+          </template>
 
           <button
             @click="goToPage(pagination.page + 1)"
             :disabled="pagination.page >= pagination.totalPages"
-            class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Halaman Berikutnya"
+            class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight class="w-4 h-4" />
           </button>

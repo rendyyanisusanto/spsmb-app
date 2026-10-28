@@ -19,7 +19,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isLoading: {
+    type: Boolean,
+    default: undefined,
+  },
 })
+
+const isBusy = computed(() => (props.isLoading !== undefined ? props.isLoading : props.loading))
 
 const classes = computed(() => {
   const base = 'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none'
@@ -44,10 +50,10 @@ const classes = computed(() => {
 <template>
   <button
     :class="classes"
-    :disabled="disabled || loading"
+    :disabled="disabled || isBusy"
     v-bind="$attrs"
   >
-    <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+    <Loader2 v-if="isBusy" class="mr-2 h-4 w-4 animate-spin" />
     <slot></slot>
   </button>
 </template>

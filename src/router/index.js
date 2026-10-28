@@ -122,6 +122,24 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
         },
         {
+          path: 'crm/schools',
+          name: 'admin-crm-schools',
+          component: () => import('@/views/admin/crm/SchoolTargetListView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'crm/schools/letter-settings',
+          name: 'admin-crm-school-letter-settings',
+          component: () => import('@/views/admin/crm/SchoolLetterSettingsView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
+        },
+        {
+          path: 'crm/schools/:id',
+          name: 'admin-crm-school-detail',
+          component: () => import('@/views/admin/crm/SchoolTargetDetailView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
           path: 'konfirmasi',
           name: 'admin-confirmation-list',
           component: () => import('@/views/admin/confirmation/ConfirmationListView.vue'),
