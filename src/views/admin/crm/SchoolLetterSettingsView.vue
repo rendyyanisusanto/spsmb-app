@@ -750,8 +750,8 @@ onMounted(() => {
 
           <!-- Paper Container with Times New Roman 12pt -->
           <div
-            class="bg-white text-slate-900 p-8 sm:p-10 rounded-2xl border border-slate-200 shadow-md max-h-[85vh] overflow-y-auto leading-normal"
-            style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5;"
+            class="bg-white text-slate-900 pt-2 pb-8 px-8 sm:pt-3 sm:pb-10 sm:px-10 rounded-2xl border border-slate-200 shadow-md max-h-[85vh] overflow-y-auto leading-normal"
+            style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; padding-top: 8px;"
           >
             <!-- Kop Surat: Gambar Kop Utama jika diupload -->
             <div v-if="letterheadImagePreview || form.letterhead_image_path" class="mb-4">

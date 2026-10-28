@@ -107,6 +107,7 @@ const createCleanLetterClone = async (letterElement) => {
   clone.style.pointerEvents = 'none';
   clone.style.boxSizing = 'border-box';
   clone.style.margin = '0';
+  clone.style.paddingTop = '8px';
 
   document.body.appendChild(clone);
   return clone;
@@ -239,7 +240,7 @@ export const printLetterElement = (letterElement) => {
         <style>
           @page {
             size: A4 portrait;
-            margin: 15mm 20mm;
+            margin: 4mm 15mm 15mm 15mm;
           }
           * {
             box-sizing: border-box;
@@ -260,6 +261,7 @@ export const printLetterElement = (letterElement) => {
             max-width: 210mm;
             margin: 0 auto;
             padding: 0;
+            padding-top: 2px !important;
           }
           img {
             max-width: 100%;

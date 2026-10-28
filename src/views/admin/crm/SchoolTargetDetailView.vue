@@ -1150,8 +1150,8 @@ onMounted(() => {
         <div v-else-if="letterPreviewData" class="max-h-[68vh] overflow-y-auto p-4 bg-slate-100 dark:bg-slate-950 rounded-2xl flex justify-center">
           <div
             ref="letterPaperRef"
-            class="bg-white text-slate-900 w-[210mm] min-h-[297mm] p-10 sm:p-14 shadow-lg leading-normal relative"
-            style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5;"
+            class="bg-white text-slate-900 w-[210mm] min-h-[297mm] pt-2 pb-10 px-10 sm:pt-3 sm:pb-14 sm:px-14 shadow-lg leading-normal relative"
+            style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; padding-top: 8px;"
           >
             <!-- Kop Lembaga: Gambar Kop Utama jika tersedia -->
             <div v-if="letterPreviewData.settings.letterhead_image_path" class="mb-4">
@@ -1317,8 +1317,8 @@ onMounted(() => {
         <div class="max-h-[68vh] overflow-y-auto p-4 bg-slate-100 dark:bg-slate-950 rounded-2xl flex justify-center">
           <div
             ref="snapshotPaperRef"
-            class="bg-white text-slate-900 w-[210mm] min-h-[297mm] p-10 sm:p-14 shadow-lg leading-normal relative"
-            style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5;"
+            class="bg-white text-slate-900 w-[210mm] min-h-[297mm] pt-2 pb-10 px-10 sm:pt-3 sm:pb-14 sm:px-14 shadow-lg leading-normal relative"
+            style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; padding-top: 8px;"
           >
             <!-- Kop Lembaga from snapshot: Gambar Kop Utama jika ada -->
             <div v-if="selectedSnapshot.signer_snapshot?.letterhead?.letterhead_image_path" class="mb-4">
