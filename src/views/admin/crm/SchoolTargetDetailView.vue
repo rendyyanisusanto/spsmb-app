@@ -366,8 +366,10 @@ const handleIssueLetter = async () => {
 
 const handleDownloadPdf = async (elementRef, filename) => {
   if (!elementRef) return;
+  const targetEl = elementRef?.value || elementRef;
+  if (!targetEl) return;
   try {
-    await downloadLetterAsPdf(elementRef, filename);
+    await downloadLetterAsPdf(targetEl, filename);
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e?.type ? `Event ${e.type}` : String(e));
     alert('Gagal mendownload PDF: ' + msg);
@@ -376,7 +378,9 @@ const handleDownloadPdf = async (elementRef, filename) => {
 
 const handlePrintLetter = (elementRef) => {
   if (!elementRef) return;
-  printLetterElement(elementRef);
+  const targetEl = elementRef?.value || elementRef;
+  if (!targetEl) return;
+  printLetterElement(targetEl);
 };
 
 // --- Letter Snapshot Viewer ---
@@ -1216,47 +1220,52 @@ onMounted(() => {
             </div>
 
             <!-- Dual Signers Block -->
-            <div class="grid grid-cols-2 gap-8 text-center pt-2" style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5;">
+            <div
+              class="grid grid-cols-2 gap-8 text-center pt-2"
+              style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; display: flex; justify-content: space-between; align-items: flex-start; text-align: center; width: 100%; margin-top: 20px; page-break-inside: avoid; break-inside: avoid;"
+            >
               <!-- Signer 1 -->
-              <div>
-                <div class="text-slate-900 mb-1">
+              <div style="flex: 1 1 0%; max-width: 48%; width: 48%; text-align: center;">
+                <div class="text-slate-900 mb-1" style="color: #000; margin-bottom: 4px;">
                   {{ letterPreviewData.settings.principal_title || 'Kepala Lembaga' }},
                 </div>
-                <div class="h-20 flex items-center justify-center my-1">
+                <div class="h-20 flex items-center justify-center my-1" style="height: 75px; min-height: 75px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
                   <img
                     v-if="letterPreviewData.settings.principal_signature_path"
                     :src="resolveStorageUrl(letterPreviewData.settings.principal_signature_path)"
                     alt="TTD 1"
                     class="max-h-16 max-w-full object-contain"
+                    style="max-height: 60px; max-width: 100%; object-fit: contain;"
                   />
-                  <div v-else class="text-xs text-slate-300 italic font-serif">(Tanda Tangan)</div>
+                  <div v-else class="text-xs text-slate-300 italic font-serif" style="font-size: 11px; color: #94a3b8; font-style: italic;">(Tanda Tangan)</div>
                 </div>
-                <div class="font-bold underline text-slate-900">
+                <div class="font-bold underline text-slate-900" style="font-weight: bold; text-decoration: underline; color: #000;">
                   {{ letterPreviewData.settings.principal_name }}
                 </div>
-                <div v-if="letterPreviewData.settings.principal_nip" class="text-slate-900 mt-0.5">
+                <div v-if="letterPreviewData.settings.principal_nip" class="text-slate-900 mt-0.5" style="color: #000; margin-top: 2px;">
                   NIP. {{ letterPreviewData.settings.principal_nip }}
                 </div>
               </div>
 
               <!-- Signer 2 -->
-              <div>
-                <div class="text-slate-900 mb-1">
+              <div style="flex: 1 1 0%; max-width: 48%; width: 48%; text-align: center;">
+                <div class="text-slate-900 mb-1" style="color: #000; margin-bottom: 4px;">
                   {{ letterPreviewData.settings.spmb_chair_title || 'Ketua Panitia SPMB' }},
                 </div>
-                <div class="h-20 flex items-center justify-center my-1">
+                <div class="h-20 flex items-center justify-center my-1" style="height: 75px; min-height: 75px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
                   <img
                     v-if="letterPreviewData.settings.spmb_chair_signature_path"
                     :src="resolveStorageUrl(letterPreviewData.settings.spmb_chair_signature_path)"
                     alt="TTD 2"
                     class="max-h-16 max-w-full object-contain"
+                    style="max-height: 60px; max-width: 100%; object-fit: contain;"
                   />
-                  <div v-else class="text-xs text-slate-300 italic font-serif">(Tanda Tangan)</div>
+                  <div v-else class="text-xs text-slate-300 italic font-serif" style="font-size: 11px; color: #94a3b8; font-style: italic;">(Tanda Tangan)</div>
                 </div>
-                <div class="font-bold underline text-slate-900">
+                <div class="font-bold underline text-slate-900" style="font-weight: bold; text-decoration: underline; color: #000;">
                   {{ letterPreviewData.settings.spmb_chair_name }}
                 </div>
-                <div v-if="letterPreviewData.settings.spmb_chair_nip" class="text-slate-900 mt-0.5">
+                <div v-if="letterPreviewData.settings.spmb_chair_nip" class="text-slate-900 mt-0.5" style="color: #000; margin-top: 2px;">
                   NIP. {{ letterPreviewData.settings.spmb_chair_nip }}
                 </div>
               </div>
@@ -1378,45 +1387,50 @@ onMounted(() => {
             </div>
 
             <!-- Signers from snapshot -->
-            <div class="grid grid-cols-2 gap-8 text-center pt-2" style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5;">
-              <div>
-                <div class="text-slate-900 mb-1">
+            <div
+              class="grid grid-cols-2 gap-8 text-center pt-2"
+              style="font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; display: flex; justify-content: space-between; align-items: flex-start; text-align: center; width: 100%; margin-top: 20px; page-break-inside: avoid; break-inside: avoid;"
+            >
+              <div style="flex: 1 1 0%; max-width: 48%; width: 48%; text-align: center;">
+                <div class="text-slate-900 mb-1" style="color: #000; margin-bottom: 4px;">
                   {{ selectedSnapshot.signer_snapshot?.principal?.title || 'Kepala Lembaga' }},
                 </div>
-                <div class="h-20 flex items-center justify-center my-1">
+                <div class="h-20 flex items-center justify-center my-1" style="height: 75px; min-height: 75px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
                   <img
                     v-if="selectedSnapshot.signer_snapshot?.principal?.signature_path"
                     :src="resolveStorageUrl(selectedSnapshot.signer_snapshot.principal.signature_path)"
                     alt="TTD 1"
                     class="max-h-16 max-w-full object-contain"
+                    style="max-height: 60px; max-width: 100%; object-fit: contain;"
                   />
-                  <div v-else class="text-xs text-slate-300 italic font-serif">(Tanda Tangan)</div>
+                  <div v-else class="text-xs text-slate-300 italic font-serif" style="font-size: 11px; color: #94a3b8; font-style: italic;">(Tanda Tangan)</div>
                 </div>
-                <div class="font-bold underline text-slate-900">
+                <div class="font-bold underline text-slate-900" style="font-weight: bold; text-decoration: underline; color: #000;">
                   {{ selectedSnapshot.signer_snapshot?.principal?.name }}
                 </div>
-                <div v-if="selectedSnapshot.signer_snapshot?.principal?.nip" class="text-slate-900 mt-0.5">
+                <div v-if="selectedSnapshot.signer_snapshot?.principal?.nip" class="text-slate-900 mt-0.5" style="color: #000; margin-top: 2px;">
                   NIP. {{ selectedSnapshot.signer_snapshot.principal.nip }}
                 </div>
               </div>
 
-              <div>
-                <div class="text-slate-900 mb-1">
+              <div style="flex: 1 1 0%; max-width: 48%; width: 48%; text-align: center;">
+                <div class="text-slate-900 mb-1" style="color: #000; margin-bottom: 4px;">
                   {{ selectedSnapshot.signer_snapshot?.spmb_chair?.title || 'Ketua Panitia SPMB' }},
                 </div>
-                <div class="h-20 flex items-center justify-center my-1">
+                <div class="h-20 flex items-center justify-center my-1" style="height: 75px; min-height: 75px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
                   <img
                     v-if="selectedSnapshot.signer_snapshot?.spmb_chair?.signature_path"
                     :src="resolveStorageUrl(selectedSnapshot.signer_snapshot.spmb_chair.signature_path)"
                     alt="TTD 2"
                     class="max-h-16 max-w-full object-contain"
+                    style="max-height: 60px; max-width: 100%; object-fit: contain;"
                   />
-                  <div v-else class="text-xs text-slate-300 italic font-serif">(Tanda Tangan)</div>
+                  <div v-else class="text-xs text-slate-300 italic font-serif" style="font-size: 11px; color: #94a3b8; font-style: italic;">(Tanda Tangan)</div>
                 </div>
-                <div class="font-bold underline text-slate-900">
+                <div class="font-bold underline text-slate-900" style="font-weight: bold; text-decoration: underline; color: #000;">
                   {{ selectedSnapshot.signer_snapshot?.spmb_chair?.name }}
                 </div>
-                <div v-if="selectedSnapshot.signer_snapshot?.spmb_chair?.nip" class="text-slate-900 mt-0.5">
+                <div v-if="selectedSnapshot.signer_snapshot?.spmb_chair?.nip" class="text-slate-900 mt-0.5" style="color: #000; margin-top: 2px;">
                   NIP. {{ selectedSnapshot.signer_snapshot.spmb_chair.nip }}
                 </div>
               </div>
