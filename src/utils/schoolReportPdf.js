@@ -111,7 +111,15 @@ const formatDate = (dateString, includeTime = false) => {
  * - Bold ONLY on categories/section headers (regular font on all field points)
  * - Visual photo documentation rendered cleanly in grid
  */
-export const generateSchoolReportPdf = async ({ school, reports = [], letters = [], statusHistories = [] }) => {
+export const generateSchoolReportPdf = async ({
+  school,
+  reports = [],
+  letters = [],
+  statusHistories = [],
+  institution = null,
+  kopUrl = null,
+  logoUrl = null
+}) => {
   if (!school) {
     throw new Error('Data target sekolah tidak ditemukan.');
   }
@@ -154,82 +162,133 @@ export const generateSchoolReportPdf = async ({ school, reports = [], letters = 
     class: ''
   };
 
-  // Preload logo
-  const logo = await loadImageAsBase64('/1.png');
+  // Nama lembaga formal
+  const formalInstName =
+    institution?.name ||
+    (institution?.institution_type ? `${institution.institution_type} IT Asy-Syadzili` : 'SMK IT Asy-Syadzili');
 
-  let currentY = 12;
+  // Preload kop & logo lembaga (persis seperti struk pendaftaran receiptPdf)
+  const finalKopUrl = kopUrl || institution?.kop_url || institution?.kop || null;
+  const finalLogoUrl = logoUrl || institution?.logo_url || institution?.logo || '/1.png';
+
+  const [kopImg, logoImg] = await Promise.all([
+    loadImageAsBase64(finalKopUrl),
+    loadImageAsBase64(finalLogoUrl)
+  ]);
+
+  let currentY = 36;
 
   // ==========================================
-  // 1. KOP SURAT RESMI INSTITUSI (OFFICIAL KOP)
+  // 1. KOP SURAT SESUAI LEMBAGA (SEPERTI CETAK STRUK PENDAFTARAN)
   // ==========================================
-  const logoWidth = 19;
-  const logoHeight = 19;
+  if (kopImg) {
+    // 1. Kop Surat Banner di bagian atas (margin top 8mm, lebar 182mm)
+    const availWidth = 182;
+    const rawHeight = availWidth * (kopImg.height / kopImg.width);
+    const kopHeight = Math.min(36, Math.max(16, rawHeight));
 
-  if (logo && logo.dataUrl) {
-    pdf.addImage(logo.dataUrl, 'PNG', marginX, currentY + 0.5, logoWidth, logoHeight);
+    pdf.addImage(kopImg.dataUrl, 'PNG', 14, 8, availWidth, kopHeight);
+
+    let headerY = 8 + kopHeight + 6;
+
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('LAPORAN KUNJUNGAN & SOSIALISASI TARGET SEKOLAH', 105, headerY, { align: 'center' });
+    headerY += 5;
+
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(
+      `Target: ${school.school_name || '-'}  •  Status: ${statusInfo.label.toUpperCase()}  •  Tanggal Cetak: ${formatDate(new Date(), true)}`,
+      105,
+      headerY,
+      { align: 'center' }
+    );
+
+    currentY = headerY + 7;
+  } else if (logoImg) {
+    // 2. Logo lembaga dengan teks resmi lembaga (margin top 8mm)
+    pdf.addImage(logoImg.dataUrl, 'PNG', 14, 8, 20, 20);
+
+    pdf.setFontSize(12.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('YAYASAN PONDOK PESANTREN ASY-SYADZILI', 105 + 6, 13, { align: 'center' });
+
+    pdf.setFontSize(11);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(formalInstName.toUpperCase(), 105 + 6, 18.5, { align: 'center' });
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('PANITIA PENERIMAAN SANTRI & SISWA BARU TERPADU (SPSMB)', 105 + 6, 23.5, { align: 'center' });
+
+    pdf.setLineWidth(0.4);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.line(14, 29, 196, 29);
+
+    let headerY = 35;
+
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('LAPORAN KUNJUNGAN & SOSIALISASI TARGET SEKOLAH', 105, headerY, { align: 'center' });
+    headerY += 5;
+
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(
+      `Target: ${school.school_name || '-'}  •  Status: ${statusInfo.label.toUpperCase()}  •  Tanggal Cetak: ${formatDate(new Date(), true)}`,
+      105,
+      headerY,
+      { align: 'center' }
+    );
+
+    currentY = headerY + 7;
+  } else {
+    // 3. Fallback default header teks resmi
+    pdf.setFontSize(12.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('YAYASAN PONDOK PESANTREN ASY-SYADZILI', 105, 13, { align: 'center' });
+
+    pdf.setFontSize(11);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(formalInstName.toUpperCase(), 105, 18.5, { align: 'center' });
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('PANITIA PENERIMAAN SANTRI & SISWA BARU TERPADU (SPSMB)', 105, 23.5, { align: 'center' });
+
+    pdf.setLineWidth(0.4);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.line(14, 29, 196, 29);
+
+    let headerY = 35;
+
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('LAPORAN KUNJUNGAN & SOSIALISASI TARGET SEKOLAH', 105, headerY, { align: 'center' });
+    headerY += 5;
+
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(
+      `Target: ${school.school_name || '-'}  •  Status: ${statusInfo.label.toUpperCase()}  •  Tanggal Cetak: ${formatDate(new Date(), true)}`,
+      105,
+      headerY,
+      { align: 'center' }
+    );
+
+    currentY = headerY + 7;
   }
-
-  const headerTextX = logo && logo.dataUrl ? marginX + logoWidth + 4 : marginX;
-  const headerTextWidth = logo && logo.dataUrl ? contentWidth - logoWidth - 4 : contentWidth;
-  const headerCenterX = headerTextX + headerTextWidth / 2;
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(12);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text('YAYASAN PONDOK PESANTREN ASY-SYADZILI', headerCenterX, currentY + 4, { align: 'center' });
-
-  pdf.setFontSize(10.5);
-  pdf.text('PANITIA PENERIMAAN SANTRI & SISWA BARU TERPADU (SPSMB)', headerCenterX, currentY + 9, { align: 'center' });
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
-  pdf.setTextColor(40, 40, 40);
-  pdf.text(
-    'Jl. Raya Asy-Syadzili No. 1, Sumberpasir, Kec. Pakis, Kab. Malang, Jawa Timur 65154',
-    headerCenterX,
-    currentY + 13.5,
-    { align: 'center' }
-  );
-  pdf.text(
-    'Website: asy-syadzili.sch.id  •  Email: spsmb@asy-syadzili.sch.id  •  Telp/WA: 0812-3456-7890',
-    headerCenterX,
-    currentY + 17.5,
-    { align: 'center' }
-  );
-
-  // Garis Ganda Pemisah Kop Surat (Official Double Line)
-  currentY += 21;
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.65);
-  pdf.line(marginX, currentY, marginX + contentWidth, currentY);
-
-  pdf.setLineWidth(0.2);
-  pdf.line(marginX, currentY + 0.8, marginX + contentWidth, currentY + 0.8);
-
-  currentY += 6;
-
-  // ==========================================
-  // 2. JUDUL LAPORAN RESMI (KATEGORI UTAMA: BOLD)
-  // ==========================================
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text('LAPORAN KUNJUNGAN & SOSIALISASI TARGET SEKOLAH', marginX + contentWidth / 2, currentY + 1, {
-    align: 'center'
-  });
-
-  currentY += 5;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
-  pdf.setTextColor(60, 60, 60);
-  pdf.text(
-    `Target: ${school.school_name || '-'}  •  Status: ${statusInfo.label.toUpperCase()}  •  Tanggal Cetak: ${formatDate(new Date(), true)}`,
-    marginX + contentWidth / 2,
-    currentY,
-    { align: 'center' }
-  );
-
-  currentY += 7;
 
   // ==========================================
   // 3. SEKSI A: DATA PROFIL TARGET SEKOLAH

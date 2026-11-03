@@ -16,8 +16,10 @@ import {
   updateReport,
   deleteReport,
   uploadPhotos,
-  deletePhoto
+  deletePhoto,
+  getActiveLetterSettings
 } from '@/services/crmSchoolService';
+import { getPublicInstitutions } from '@/services/institutionService';
 import {
   CRM_SCHOOL_STATUS,
   CRM_SCHOOL_STATUS_LABELS,
@@ -528,11 +530,48 @@ const handleDownloadReportPdf = async () => {
   if (!school.value) return;
   isGeneratingPdf.value = true;
   try {
+    let targetInst = null;
+    let kopUrl = null;
+    let logoUrl = null;
+
+    // 1. Ambil lembaga dari user login jika ada
+    const userInstId = user.value?.institution?.id || user.value?.institutions?.[0]?.id || user.value?.institutions?.[0];
+
+    try {
+      const instRes = await getPublicInstitutions();
+      const allInsts = instRes.data || [];
+      if (userInstId) {
+        targetInst = allInsts.find(i => String(i.id) === String(userInstId));
+      }
+      // Jika belum ketemu, cari lembaga formal yang memiliki kop/logo (misal SMK)
+      if (!targetInst && allInsts.length > 0) {
+        targetInst = allInsts.find(i => i.kop_url || i.logo_url) || allInsts[0];
+      }
+    } catch (_) {}
+
+    // 2. Ambil dari setting surat aktif jika ada banner kop surat
+    let letterheadImagePath = null;
+    let letterheadLogoPath = null;
+    try {
+      const setRes = await getActiveLetterSettings();
+      if (setRes && setRes.data) {
+        letterheadImagePath = setRes.data.letterhead_image_path;
+        letterheadLogoPath = setRes.data.letterhead_logo_path;
+      }
+    } catch (_) {}
+
+    // Prioritas: kop lembaga, lalu banner kop dari setting surat
+    kopUrl = targetInst?.kop_url || letterheadImagePath || null;
+    logoUrl = targetInst?.logo_url || letterheadLogoPath || '/1.png';
+
     await generateSchoolReportPdf({
       school: school.value,
       reports: presentationReports.value,
       letters: issuedLetters.value,
-      statusHistories: statusHistories.value
+      statusHistories: statusHistories.value,
+      institution: targetInst,
+      kopUrl,
+      logoUrl
     });
   } catch (error) {
     console.error('Gagal mengunduh laporan PDF:', error);
