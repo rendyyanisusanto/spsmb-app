@@ -1045,7 +1045,7 @@ onMounted(() => {
                     class="group relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 aspect-4/3"
                   >
                     <img
-                      :src="photo.file_path"
+                      :src="resolveStorageUrl(photo.file_path)"
                       :alt="photo.caption || 'Foto Presentasi'"
                       class="w-full h-full object-cover cursor-pointer hover:scale-105 transition duration-300"
                       @click="openLightbox(photo)"
@@ -1922,7 +1922,7 @@ onMounted(() => {
         </button>
 
         <img
-          :src="activePhoto.file_path"
+          :src="resolveStorageUrl(activePhoto.file_path)"
           :alt="activePhoto.caption || 'Foto Dokumentasi'"
           class="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl"
         />
