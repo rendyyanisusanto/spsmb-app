@@ -110,6 +110,12 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
         },
         {
+          path: 'crm/reports',
+          name: 'admin-crm-reports',
+          component: () => import('@/views/admin/crm/CrmReportView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
           path: 'crm/leads/:id',
           name: 'admin-crm-lead-detail',
           component: () => import('@/views/admin/crm/LeadDetailView.vue'),

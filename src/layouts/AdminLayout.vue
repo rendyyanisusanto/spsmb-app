@@ -29,6 +29,7 @@ import {
   CheckSquare,
   CreditCard,
   GitBranch,
+  BarChart3,
   X
 } from 'lucide-vue-next'
 
@@ -139,6 +140,12 @@ const menuSections = [
             icon: Users,
             label: 'Manajemen Lead',
             href: '/admin/crm/leads',
+            roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS']
+          },
+          {
+            icon: BarChart3,
+            label: 'Laporan CRM',
+            href: '/admin/crm/reports',
             roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS']
           },
           {
