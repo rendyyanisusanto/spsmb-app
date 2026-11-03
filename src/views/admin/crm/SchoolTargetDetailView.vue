@@ -26,6 +26,7 @@ import {
   getStatusBadge
 } from '@/constants/crmSchoolStatus';
 import { downloadLetterAsPdf, printLetterElement } from '@/utils/schoolLetterPdf';
+import { generateSchoolReportPdf } from '@/utils/schoolReportPdf';
 import { resolveStorageUrl } from '@/utils/imageUrl';
 
 import BaseLoading from '@/components/ui/BaseLoading.vue';
@@ -520,6 +521,27 @@ const openLightbox = (photo) => {
   isLightboxOpen.value = true;
 };
 
+// --- PDF Report Export ---
+const isGeneratingPdf = ref(false);
+
+const handleDownloadReportPdf = async () => {
+  if (!school.value) return;
+  isGeneratingPdf.value = true;
+  try {
+    await generateSchoolReportPdf({
+      school: school.value,
+      reports: presentationReports.value,
+      letters: issuedLetters.value,
+      statusHistories: statusHistories.value
+    });
+  } catch (error) {
+    console.error('Gagal mengunduh laporan PDF:', error);
+    alert('Terjadi kesalahan saat membuat file PDF: ' + (error.message || 'Silakan coba lagi.'));
+  } finally {
+    isGeneratingPdf.value = false;
+  }
+};
+
 onMounted(() => {
   fetchAllDetail();
 });
@@ -583,6 +605,17 @@ onMounted(() => {
         >
           <Edit class="w-4 h-4 text-slate-500" />
           Edit Data
+        </BaseButton>
+
+        <BaseButton
+          variant="outline"
+          class="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50/60 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+          :disabled="isGeneratingPdf"
+          :isLoading="isGeneratingPdf"
+          @click="handleDownloadReportPdf"
+        >
+          <Download class="w-4 h-4 text-emerald-600" />
+          Unduh Laporan PDF
         </BaseButton>
 
         <BaseButton
@@ -902,15 +935,29 @@ onMounted(() => {
               </div>
             </div>
 
-            <BaseButton
-              variant="primary"
-              size="sm"
-              class="flex items-center gap-1.5 text-xs shadow-xs"
-              @click="openCreateReportModal"
-            >
-              <Plus class="w-4 h-4" />
-              Tambah Laporan
-            </BaseButton>
+            <div class="flex items-center gap-2">
+              <BaseButton
+                variant="outline"
+                size="sm"
+                class="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50/60 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                :disabled="isGeneratingPdf"
+                :isLoading="isGeneratingPdf"
+                @click="handleDownloadReportPdf"
+              >
+                <Download class="w-3.5 h-3.5 text-emerald-600" />
+                Cetak Laporan PDF
+              </BaseButton>
+
+              <BaseButton
+                variant="primary"
+                size="sm"
+                class="flex items-center gap-1.5 text-xs shadow-xs"
+                @click="openCreateReportModal"
+              >
+                <Plus class="w-4 h-4" />
+                Tambah Laporan
+              </BaseButton>
+            </div>
           </div>
 
           <!-- Reports List / Accordion -->
