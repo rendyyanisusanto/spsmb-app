@@ -57,7 +57,7 @@ const router = createRouter({
           component: () => import('@/views/public/GlobalFaqView.vue')
         },
         {
-          path: ':slug(ppsq-1|ppsq-2|smp|sma|smk)',
+          path: ':slug(ppsq-1|ppsq-2|sd|smp|sma|smk)',
           name: 'public-institution-landing',
           component: () => import('@/views/public/InstitutionLandingView.vue')
         },

@@ -20,12 +20,8 @@ const meta = ref({
   totalPages: 1
 })
 
-const fetchLogs = async () => {
-  loading.value = true
-  try {
+const buildParams = () => {
     const params = {
-      page: currentPage.value,
-      limit: perPage.value,
       action: filterAction.value,
       entityType: filterModule.value,
       search: search.value
@@ -46,6 +42,13 @@ const fetchLogs = async () => {
     }
 
     // Notice we do not pass institution because scope is handled strictly in backend based on Auth token
+    return params
+}
+
+const fetchLogs = async () => {
+  loading.value = true
+  try {
+    const params = { ...buildParams(), page: currentPage.value, limit: perPage.value }
 
     const res = await getAuditLogs(params)
     if (res.success) {
@@ -108,6 +111,7 @@ const roles = [
 const institutions = [
   { value: 'ALL', label: 'Semua Lembaga / Global' },
   { value: 'Non Formal', label: 'Non Formal' },
+  { value: 'SD IT Asy-Syadzili', label: 'SD IT Asy-Syadzili' },
   { value: 'SMP IT Asy-Syadzili', label: 'SMP IT Asy-Syadzili' },
   { value: 'SMA IT Asy-Syadzili', label: 'SMA IT Asy-Syadzili' },
   { value: 'SMK IT Asy-Syadzili', label: 'SMK IT Asy-Syadzili' }
@@ -173,32 +177,57 @@ const getRoleColor = (role) => {
   return 'bg-blue-100 text-blue-700 border-blue-200'
 }
 
-// Export Audit Log
-const handleExport = () => {
-  if (filteredLogs.value.length === 0) return
-  exporting.value = true
-  
-  const data = filteredLogs.value.map(log => ({
-    'Waktu': log.createdAt,
-    'Admin': log.user_name || log.userName,
-    'Username': log.user_username || log.username,
-    'Role': '-',
-    'Lembaga': '-',
-    'Aktivitas': getActionLabel(log.action),
-    'Module': getModuleLabel(log.entityType),
-    'Target Type': log.entityType,
-    'Target Name': log.entityId,
-    'Deskripsi': log.description
-  }))
-
-  const fileName = isSuperAdmin.value ? 'SPSMB_AuditLog_Semua' : `SPSMB_AuditLog_${adminInstitution.value.replace(/ /g, '_')}`
-
-  setTimeout(() => {
-    exportToExcel(fileName, [{ name: 'Audit Log', data }])
-    exporting.value = false
-  }, 800)
+// Export Audit Log (semua data sesuai filter, bukan hanya halaman yang tampil)
+const formatExportTime = (value) => {
+  if (!value) return '-'
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return String(value)
+  return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'medium' })
 }
-</script>
+
+const handleExport = async () => {
+  if (exporting.value || allLogs.value.length === 0) return
+  exporting.value = true
+
+  try {
+    const exportLimit = 100
+    const baseParams = { ...buildParams(), limit: exportLimit }
+    const rows = []
+    let page = 1
+    let totalPagesToFetch = 1
+
+    do {
+      const res = await getAuditLogs({ ...baseParams, page })
+      if (!res.success) throw new Error(res.message || 'Gagal mengambil data audit log')
+      rows.push(...(res.data || []))
+      totalPagesToFetch = res.meta?.totalPages || 1
+      page++
+    } while (page <= totalPagesToFetch)
+
+    if (rows.length === 0) return
+
+    const data = rows.map(log => ({
+      'Waktu': formatExportTime(log.createdAt),
+      'Admin': log.user_name || log.userName || '-',
+      'Username': log.user_username || log.username || '-',
+      'Aktivitas': getActionLabel(log.action),
+      'Module': getModuleLabel(log.entityType),
+      'Target Type': log.entityType || '-',
+      'Target ID': log.entityId ?? '-',
+      'Deskripsi': log.description || '-',
+      'IP Address': log.ipAddress || '-'
+    }))
+
+    const instName = adminInstitution.value ? adminInstitution.value.replace(/\s+/g, '_') : 'Lembaga'
+    const fileName = isSuperAdmin.value ? 'SPSMB_AuditLog_Semua' : `SPSMB_AuditLog_${instName}`
+    exportToExcel(fileName, [{ name: 'Audit Log', data }])
+  } catch (error) {
+    console.error('Failed to export audit logs:', error)
+    alert('Gagal mengekspor audit log. Silakan coba lagi.')
+  } finally {
+    exporting.value = false
+  }
+}</script>
 
 <template>
   <div class="audit-log-view pb-20">

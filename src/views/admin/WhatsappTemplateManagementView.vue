@@ -229,6 +229,7 @@ const formalList = computed(() => {
   const items = institutionsList.value.filter(i => i.institution_type !== 'PONDOK')
   if (items.length > 0) return items
   return [
+    { id: 6, name: 'SD IT Asy-Syadzili' },
     { id: 3, name: 'SMP IT Asy-Syadzili' },
     { id: 4, name: 'SMA IT Asy-Syadzili' },
     { id: 5, name: 'SMK IT Asy-Syadzili' }

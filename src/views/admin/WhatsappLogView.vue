@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
-import { getWhatsappLogsMock } from '@/data/mock/whatsappLogs'
+import { getWhatsappLogs } from '@/services/whatsappLogService'
 
 const { user } = useAuth()
 const isSuperAdmin = computed(() => user.value?.role === 'SUPER_ADMIN')
@@ -11,6 +11,7 @@ const adminInstitution = computed(() => user.value?.institution?.name || null)
 const availableInstitutions = [
   { value: 'ALL', label: 'Semua Lembaga' },
   { value: 'Non Formal', label: 'Non Formal' },
+  { value: 'SD IT Asy-Syadzili', label: 'SD IT Asy-Syadzili' },
   { value: 'SMP IT Asy-Syadzili', label: 'SMP IT Asy-Syadzili' },
   { value: 'SMA IT Asy-Syadzili', label: 'SMA IT Asy-Syadzili' },
   { value: 'SMK IT Asy-Syadzili', label: 'SMK IT Asy-Syadzili' }
@@ -64,81 +65,84 @@ const currentPage = ref(1)
 const perPage = ref(10)
 const perPageOptions = [10, 25, 50, 100]
 
-// Fetch data
+const meta = ref({
+  page: 1,
+  limit: 10,
+  total: 0,
+  totalPages: 1
+})
+
+const summaryData = ref({
+  total: 0,
+  success: 0,
+  pending: 0,
+  failed: 0
+})
+
+const buildParams = () => {
+  const params = {
+    page: currentPage.value,
+    limit: perPage.value,
+    event: filterEvent.value,
+    status: filterStatus.value,
+    search: search.value.trim()
+  }
+
+  if (isSuperAdmin.value && filterInstitution.value !== 'ALL') {
+    params.institutionName = filterInstitution.value
+  }
+
+  if (filterDateType.value === 'TODAY') {
+    const today = new Date().toISOString().split('T')[0]
+    params.dateFrom = today
+    params.dateTo = today
+  } else if (filterDateType.value === 'LAST_7') {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    params.dateFrom = d.toISOString().split('T')[0]
+    params.dateTo = new Date().toISOString().split('T')[0]
+  } else if (filterDateType.value === 'LAST_30') {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    params.dateFrom = d.toISOString().split('T')[0]
+    params.dateTo = new Date().toISOString().split('T')[0]
+  } else if (filterDateType.value === 'CUSTOM') {
+    if (customDateStart.value) params.dateFrom = customDateStart.value
+    if (customDateEnd.value) params.dateTo = customDateEnd.value
+  }
+
+  return params
+}
+
+// Fetch data from real backend database
 const fetchLogs = async () => {
   loading.value = true
-  const res = await getWhatsappLogsMock()
-  if (res.success) {
-    allLogs.value = res.data
+  try {
+    const res = await getWhatsappLogs(buildParams())
+    if (res && res.success) {
+      allLogs.value = res.data || []
+      if (res.summary) {
+        summaryData.value = res.summary
+      }
+      if (res.meta) {
+        meta.value = res.meta
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load WhatsApp logs:', error)
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
 onMounted(() => {
   fetchLogs()
 })
 
-// Filter Logic
-const filteredLogs = computed(() => {
-  let result = allLogs.value
-
-  // Role Security Filter
-  if (!isSuperAdmin.value && adminInstitution.value) {
-    result = result.filter(log => log.institutionName === adminInstitution.value)
-  }
-
-  // Super Admin Institution Filter
-  if (isSuperAdmin.value && filterInstitution.value !== 'ALL') {
-    result = result.filter(log => log.institutionName === filterInstitution.value)
-  }
-
-  // Event & Status Filters
-  if (filterEvent.value !== 'ALL') {
-    result = result.filter(log => log.event === filterEvent.value)
-  }
-  if (filterStatus.value !== 'ALL') {
-    result = result.filter(log => log.status === filterStatus.value)
-  }
-
-  // Search Filter
-  if (search.value) {
-    const s = search.value.toLowerCase()
-    result = result.filter(log => 
-      (log.studentName && log.studentName.toLowerCase().includes(s)) ||
-      (log.recipientName && log.recipientName.toLowerCase().includes(s)) ||
-      (log.registrationNumber && log.registrationNumber.toLowerCase().includes(s)) ||
-      (log.whatsapp && log.whatsapp.toLowerCase().includes(s))
-    )
-  }
-
-  // Date Filter (Frontend Mock)
-  // Since mock dates are '2026-09-XX HH:mm', we'll simulate logic
-  // For 'TODAY', we'll pretend today is '2026-09-30'
-  const mockTodayStr = '2026-09-30'
-  if (filterDateType.value === 'TODAY') {
-    result = result.filter(log => log.createdAt.startsWith(mockTodayStr))
-  } else if (filterDateType.value === 'CUSTOM' && customDateStart.value && customDateEnd.value) {
-    const start = new Date(customDateStart.value)
-    const end = new Date(customDateEnd.value)
-    end.setHours(23, 59, 59, 999)
-    result = result.filter(log => {
-      const logDate = new Date(log.createdAt.split(' ')[0])
-      return logDate >= start && logDate <= end
-    })
-  }
-
-  return result
-})
-
-// Pagination Logic
-const totalItems = computed(() => filteredLogs.value.length)
-const totalPages = computed(() => Math.ceil(totalItems.value / perPage.value))
-
-const paginatedLogs = computed(() => {
-  const start = (currentPage.value - 1) * perPage.value
-  const end = start + perPage.value
-  return filteredLogs.value.slice(start, end)
-})
+const filteredLogs = computed(() => allLogs.value)
+const paginatedLogs = computed(() => allLogs.value)
+const totalItems = computed(() => meta.value.total)
+const totalPages = computed(() => meta.value.totalPages)
 
 const changePage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
@@ -146,22 +150,22 @@ const changePage = (page) => {
   }
 }
 
-// Watch filters to reset page
-import { watch } from 'vue'
+// Watch filters to reset page and re-fetch with debounce
+let debounceTimeout = null
 watch([search, filterEvent, filterStatus, filterInstitution, filterDateType, customDateStart, customDateEnd, perPage], () => {
   currentPage.value = 1
+  if (debounceTimeout) clearTimeout(debounceTimeout)
+  debounceTimeout = setTimeout(() => {
+    fetchLogs()
+  }, 300)
+})
+
+watch(currentPage, () => {
+  fetchLogs()
 })
 
 // Summary Cards Logic
-const summary = computed(() => {
-  const data = filteredLogs.value
-  return {
-    total: data.length,
-    success: data.filter(log => log.status === 'SENT' || log.status === 'DELIVERED').length,
-    pending: data.filter(log => log.status === 'PENDING' || log.status === 'PROCESSING').length,
-    failed: data.filter(log => log.status === 'FAILED').length
-  }
-})
+const summary = computed(() => summaryData.value)
 
 // Helper functions
 const getStatusLabel = (status) => {
@@ -177,6 +181,19 @@ const getStatusColor = (status) => {
     'FAILED': 'bg-red-50 text-red-700 border-red-200'
   }
   return colors[status] || colors['PENDING']
+}
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return String(value)
+  return d.toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 // Modal State
@@ -318,22 +335,22 @@ const openDetail = (log) => {
           <tbody>
             <tr v-for="log in paginatedLogs" :key="log.id" class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
               <td class="p-4 text-sm font-mono text-slate-600 whitespace-nowrap">
-                {{ log.createdAt }}
+                {{ formatDateTime(log.createdAt) }}
               </td>
               <td class="p-4">
-                <div class="font-bold text-slate-800 text-sm">{{ log.recipientName }}</div>
+                <div class="font-bold text-slate-800 text-sm">{{ log.recipientName || 'Penerima' }}</div>
                 <div class="text-xs text-slate-500 font-mono mt-0.5">{{ log.whatsapp }}</div>
               </td>
               <td class="p-4">
-                <div class="font-bold text-slate-700 text-sm">{{ log.studentName }}</div>
+                <div class="font-bold text-slate-700 text-sm">{{ log.studentName || '-' }}</div>
                 <div class="text-xs text-slate-500 mt-0.5 flex gap-2 items-center">
-                  <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{{ log.registrationNumber }}</span>
-                  <span class="truncate max-w-[150px]">{{ log.institutionName }}</span>
+                  <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{{ log.registrationNumber || '-' }}</span>
+                  <span class="truncate max-w-[150px]">{{ log.institutionName || '-' }}</span>
                 </div>
               </td>
               <td class="p-4">
                 <div class="font-bold text-slate-700 text-sm">{{ eventTypes.find(e => e.value === log.event)?.label || log.event }}</div>
-                <div class="text-xs text-slate-500 mt-0.5 truncate max-w-[200px] italic">"{{ log.templateName }}"</div>
+                <div class="text-xs text-slate-500 mt-0.5 truncate max-w-[200px] italic">"{{ log.templateName || '-' }}"</div>
               </td>
               <td class="p-4">
                 <span :class="['inline-flex items-center px-2.5 py-1 rounded border text-xs font-bold', getStatusColor(log.status)]">
@@ -420,13 +437,13 @@ const openDetail = (log) => {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
             <div>
               <div class="text-xs text-slate-400 font-semibold mb-1">Penerima & Kontak</div>
-              <div class="font-bold text-slate-800">{{ selectedLog.recipientName }}</div>
-              <div class="text-slate-600 font-mono">{{ selectedLog.whatsapp }}</div>
+              <div class="font-bold text-slate-800">{{ selectedLog.recipientName || 'Penerima' }}</div>
+              <div class="text-slate-600 font-mono">{{ selectedLog.whatsapp || '-' }}</div>
             </div>
             <div>
               <div class="text-xs text-slate-400 font-semibold mb-1">Pendaftar</div>
-              <div class="font-bold text-slate-800">{{ selectedLog.studentName }}</div>
-              <div class="text-slate-600 font-mono">{{ selectedLog.registrationNumber }}</div>
+              <div class="font-bold text-slate-800">{{ selectedLog.studentName || '-' }}</div>
+              <div class="text-slate-600 font-mono">{{ selectedLog.registrationNumber || '-' }}</div>
             </div>
             <div>
               <div class="text-xs text-slate-400 font-semibold mb-1">Event Sistem</div>
@@ -434,17 +451,16 @@ const openDetail = (log) => {
             </div>
             <div>
               <div class="text-xs text-slate-400 font-semibold mb-1">Lembaga</div>
-              <div class="font-bold text-slate-700">{{ selectedLog.institutionName }}</div>
+              <div class="font-bold text-slate-700">{{ selectedLog.institutionName || '-' }}</div>
             </div>
             <div>
               <div class="text-xs text-slate-400 font-semibold mb-1">Template Info</div>
-              <div class="text-slate-700 font-medium">{{ selectedLog.templateName }} <span class="text-xs bg-slate-100 text-slate-500 px-1 rounded ml-1">{{ selectedLog.templateScope }}</span></div>
+              <div class="text-slate-700 font-medium">{{ selectedLog.templateName || '-' }} <span class="text-xs bg-slate-100 text-slate-500 px-1 rounded ml-1">{{ selectedLog.templateScope || 'GLOBAL' }}</span></div>
             </div>
             <div>
               <div class="text-xs text-slate-400 font-semibold mb-1">Waktu</div>
-              <div class="text-slate-600"><span class="w-16 inline-block">Dibuat:</span> <span class="font-mono">{{ selectedLog.createdAt || '-' }}</span></div>
-              <div class="text-slate-600"><span class="w-16 inline-block">Dikirim:</span> <span class="font-mono">{{ selectedLog.sentAt || '-' }}</span></div>
-              <div class="text-slate-600"><span class="w-16 inline-block">Diterima:</span> <span class="font-mono">{{ selectedLog.deliveredAt || '-' }}</span></div>
+              <div class="text-slate-600"><span class="w-16 inline-block">Dibuat:</span> <span class="font-mono">{{ formatDateTime(selectedLog.createdAt) }}</span></div>
+              <div class="text-slate-600"><span class="w-16 inline-block">Dikirim:</span> <span class="font-mono">{{ formatDateTime(selectedLog.sentAt) }}</span></div>
             </div>
           </div>
 
@@ -452,7 +468,7 @@ const openDetail = (log) => {
           <div>
             <div class="text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider flex items-center justify-between">
               Isi Pesan
-              <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-semibold normal-case">Sudah dirender</span>
+              <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-semibold normal-case">Pesan Terkirim</span>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
               {{ selectedLog.message }}

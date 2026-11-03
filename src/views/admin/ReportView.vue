@@ -24,7 +24,7 @@ onMounted(() => {
 })
 
 // Filter Options
-const availableInstitutions = ['ALL', 'Non Formal', 'SMP IT Asy-Syadzili', 'SMA IT Asy-Syadzili', 'SMK IT Asy-Syadzili']
+const availableInstitutions = ['ALL', 'Non Formal', 'SD IT Asy-Syadzili', 'SMP IT Asy-Syadzili', 'SMA IT Asy-Syadzili', 'SMK IT Asy-Syadzili']
 const availableGelombang = ['ALL', 'Gelombang 1', 'Gelombang 2', 'Gelombang 3']
 const availableStatus = ['ALL', 'Pendaftaran Awal', 'Form Belum Lengkap', 'Form Lengkap', 'Menunggu Verifikasi', 'Perlu Perbaikan', 'Terverifikasi', 'Selesai']
 const availableGenders = ['ALL', 'Laki-laki', 'Perempuan']

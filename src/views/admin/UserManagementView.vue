@@ -8,6 +8,13 @@ import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseEmptyState from '@/components/ui/BaseEmptyState.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 
+const formatLastLogin = (value) => {
+  if (!value) return 'Belum pernah'
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return 'Belum pernah'
+  return d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 // Data
 const loading = ref(true)
 const saving = ref(false)
@@ -364,7 +371,7 @@ const toggleStatus = async (user) => {
                 </span>
               </td>
               <td class="p-4 text-sm text-slate-500 font-mono">
-                {{ u.lastLogin || 'Belum pernah' }}
+                {{ formatLastLogin(u.lastLoginAt) }}
               </td>
               <td class="p-4 text-right">
                 <div class="flex items-center justify-end gap-2">

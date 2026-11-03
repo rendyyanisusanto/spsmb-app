@@ -59,6 +59,7 @@ const formatDate = (dateString) => {
 const formatRegType = (type) => {
   const map = {
     NON_FORMAL: 'Non Formal (Hanya Pondok)',
+    SD: 'SD IT Asy-Syadzili',
     SMP: 'SMP IT Asy-Syadzili',
     SMA: 'SMA IT Asy-Syadzili',
     SMK: 'SMK IT Asy-Syadzili'

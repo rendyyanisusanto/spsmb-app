@@ -86,7 +86,7 @@ const goToRegister = () => {
     return
   }
   const inst = landingData.value.institution
-  // For formal school (SMP, SMA, SMK): preselect institution id
+  // For formal school (SD, SMP, SMA, SMK): preselect institution id
   // For pondok (PPSQ1, PPSQ2): preselect gender / non-formal context
   if (inst.type === 'PONDOK') {
     const gender = inst.genderScope === 'MALE' ? 'L' : 'P'

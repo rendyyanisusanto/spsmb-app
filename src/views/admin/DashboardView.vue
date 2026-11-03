@@ -49,6 +49,7 @@ const getInitials = (name) => {
 
 const getBadgeClass = (lembaga) => {
   const classes = {
+    'SD IT Asy-Syadzili': 'bg-rose-100 text-rose-700 border-rose-200',
     'SMP IT Asy-Syadzili': 'bg-blue-100 text-blue-700 border-blue-200',
     'SMA IT Asy-Syadzili': 'bg-green-100 text-green-700 border-green-200',
     'SMK IT Asy-Syadzili': 'bg-amber-100 text-amber-700 border-amber-200',
