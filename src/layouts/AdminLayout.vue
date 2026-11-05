@@ -71,6 +71,31 @@ const menuSections = [
         roles: ['SUPER_ADMIN', 'ADMIN_SPSMB']
       },
       {
+        icon: FileCheck,
+        label: 'Kelengkapan Pendaftar',
+        roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'],
+        children: [
+          {
+            icon: Users,
+            label: 'Data Kelengkapan',
+            href: '/admin/kelengkapan-pendaftar',
+            roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS']
+          },
+          {
+            icon: FileText,
+            label: 'Laporan Dokumen',
+            href: '/admin/kelengkapan-pendaftar/laporan',
+            roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS']
+          },
+          {
+            icon: Settings2,
+            label: 'Master Komponen',
+            href: '/admin/kelengkapan-pendaftar/master-komponen',
+            roles: ['SUPER_ADMIN', 'ADMIN_SPSMB']
+          }
+        ]
+      },
+      {
         icon: Settings2,
         label: 'Setting SPSMB',
         roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'],
@@ -309,6 +334,13 @@ const isItemActive = (href) => {
   if (!href) return false
   if (href === '/admin') return route.path === '/admin'
   if (route.path === href) return true
+  if (href === '/admin/kelengkapan-pendaftar') {
+    return route.path === '/admin/kelengkapan-pendaftar' || (
+      route.path.startsWith('/admin/kelengkapan-pendaftar/') &&
+      !route.path.startsWith('/admin/kelengkapan-pendaftar/laporan') &&
+      !route.path.startsWith('/admin/kelengkapan-pendaftar/master-komponen')
+    )
+  }
   if (href === '/admin/konfirmasi') {
     return route.path.startsWith('/admin/konfirmasi/') &&
       !route.path.startsWith('/admin/konfirmasi/siswa-resmi') &&

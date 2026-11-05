@@ -104,6 +104,30 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB'] }
         },
         {
+          path: 'kelengkapan-pendaftar',
+          name: 'admin-admission-completeness-list',
+          component: () => import('@/views/admin/admission/AdmissionCompletenessListView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'kelengkapan-pendaftar/laporan',
+          name: 'admin-admission-completeness-report',
+          component: () => import('@/views/admin/admission/AdmissionCompletenessReportView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'kelengkapan-pendaftar/master-komponen',
+          name: 'admin-admission-requirement-master',
+          component: () => import('@/views/admin/admission/AdmissionRequirementMasterView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
+          path: 'kelengkapan-pendaftar/:id',
+          name: 'admin-admission-completeness-detail',
+          component: () => import('@/views/admin/admission/AdmissionCompletenessDetailView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'ADMIN_SPSMB', 'PETUGAS'] }
+        },
+        {
           path: 'crm/leads',
           name: 'admin-crm-leads',
           component: () => import('@/views/admin/crm/LeadListView.vue'),
