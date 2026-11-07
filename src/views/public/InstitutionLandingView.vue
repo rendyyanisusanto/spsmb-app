@@ -46,10 +46,11 @@ const loadData = async () => {
 
   try {
     const res = await getPublicLanding(slug)
-    if (res && res.data) {
-      landingData.value = res.data
-      if (res.data.faqs && res.data.faqs.length > 0) {
-        expandedFaqId.value = res.data.faqs[0].id
+    const payload = res?.data || res
+    if (payload && payload.institution) {
+      landingData.value = payload
+      if (payload.faqs && payload.faqs.length > 0) {
+        expandedFaqId.value = payload.faqs[0].id
       }
     } else {
       notFound.value = true
