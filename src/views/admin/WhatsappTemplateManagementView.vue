@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { 
   getTemplates, 
@@ -14,6 +14,7 @@ import { getInstitutions } from '@/services/institutionService'
 import { logAudit } from '@/utils/auditLogger'
 import BaseLoading from '@/components/ui/BaseLoading.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-vue-next'
 
 const { user, hasRole } = useAuth()
 const isSuperAdmin = computed(() => hasRole('SUPER_ADMIN'))
@@ -29,9 +30,12 @@ const loading = ref(true)
 // Navigasi Utama: 'LIST' (Daftar Template) | 'PREVIEW' (Pratinjau Pesan)
 const currentView = ref('LIST')
 
-// Filter
-const selectedEvent = ref('REGISTRATION_CREATED')
+// Filter & Pagination State
+const selectedEvent = ref('ALL')
 const selectedSectionFilter = ref('ALL') // 'ALL' | 'GLOBAL' | 'PONDOK' | 'FORMAL'
+const searchQuery = ref('')
+const currentPage = ref(1)
+const pageSize = ref(10)
 
 onMounted(async () => {
   await loadMetadata()
@@ -69,12 +73,41 @@ const fetchAllTemplates = async () => {
   }
 }
 
+// Event options list
+const eventOptions = computed(() => {
+  if (eventTypes.value && eventTypes.value.length > 0) {
+    return eventTypes.value
+  }
+  return [
+    { value: 'REGISTRATION_CREATED', label: 'Pendaftaran Awal Berhasil' },
+    { value: 'REGISTRATION_SUBMITTED', label: 'Pendaftaran Berhasil Dikirim' },
+    { value: 'FORM_INCOMPLETE', label: 'Form Belum Lengkap' },
+    { value: 'DOCUMENT_REVISION_REQUIRED', label: 'Dokumen Perlu Diperbaiki' },
+    { value: 'DOCUMENTS_VERIFIED', label: 'Berkas Terverifikasi' },
+    { value: 'APPLICATION_STATUS_CHANGED', label: 'Status Pendaftaran Berubah' },
+    { value: 'ANNOUNCEMENT', label: 'Pengumuman / Informasi' }
+  ]
+})
+
 // Filtered templates
 const filteredTemplates = computed(() => {
   return allTemplates.value.filter(tpl => {
     // Filter Event
-    if (selectedEvent.value && tpl.eventCode !== selectedEvent.value) {
+    if (selectedEvent.value && selectedEvent.value !== 'ALL' && tpl.eventCode !== selectedEvent.value) {
       return false
+    }
+
+    // Filter Pencarian Teks
+    if (searchQuery.value && searchQuery.value.trim()) {
+      const q = searchQuery.value.toLowerCase().trim()
+      const name = (tpl.name || '').toLowerCase()
+      const inst = (tpl.institution?.name || '').toLowerCase()
+      const msg = (tpl.message || '').toLowerCase()
+      const code = (tpl.code || '').toLowerCase()
+      const evt = (tpl.eventCode || '').toLowerCase()
+      if (!name.includes(q) && !inst.includes(q) && !msg.includes(q) && !code.includes(q) && !evt.includes(q)) {
+        return false
+      }
     }
 
     // Hak Akses Admin Lembaga: hanya miliknya
@@ -93,6 +126,47 @@ const filteredTemplates = computed(() => {
 
     return true
   })
+})
+
+// Pagination logic
+const totalItems = computed(() => filteredTemplates.value.length)
+const totalPages = computed(() => Math.ceil(totalItems.value / pageSize.value) || 1)
+
+const paginatedTemplates = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredTemplates.value.slice(start, start + pageSize.value)
+})
+
+const displayedPages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const pages = []
+  pages.push(1)
+  if (current > 3) {
+    pages.push('...')
+  }
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  if (current < total - 2) {
+    pages.push('...')
+  }
+  pages.push(total)
+  return pages
+})
+
+const goToPage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+}
+
+watch([selectedEvent, selectedSectionFilter, searchQuery, pageSize], () => {
+  currentPage.value = 1
 })
 
 // Toggle status aktif/nonaktif
@@ -324,8 +398,10 @@ const openSinglePreview = async (tpl) => {
               v-model="selectedEvent"
               class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
             >
-              <option value="REGISTRATION_CREATED">Pendaftaran Awal Berhasil</option>
-              <option value="REGISTRATION_SUBMITTED">Pendaftaran Berhasil Dikirim</option>
+              <option value="ALL">Semua Event Notifikasi</option>
+              <option v-for="evt in eventOptions" :key="evt.value" :value="evt.value">
+                {{ evt.label }}
+              </option>
             </select>
           </div>
 
@@ -341,6 +417,17 @@ const openSinglePreview = async (tpl) => {
               <option value="PONDOK">Pondok (PPSQ)</option>
               <option value="FORMAL">Lembaga Formal</option>
             </select>
+          </div>
+
+          <!-- Input Pencarian -->
+          <div class="relative flex items-center">
+            <Search class="w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
+            <input 
+              v-model="searchQuery"
+              type="text"
+              placeholder="Cari template..."
+              class="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800 w-44 sm:w-56"
+            />
           </div>
 
         </div>
@@ -373,7 +460,7 @@ const openSinglePreview = async (tpl) => {
                 </td>
               </tr>
               <tr 
-                v-for="tpl in filteredTemplates" 
+                v-for="tpl in paginatedTemplates" 
                 :key="tpl.id"
                 class="hover:bg-slate-50/70 transition-colors"
               >
@@ -435,6 +522,61 @@ const openSinglePreview = async (tpl) => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div v-if="filteredTemplates.length > 0" class="px-4 py-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div class="flex flex-wrap items-center gap-2 text-slate-500">
+            <span>Tampilkan</span>
+            <select 
+              v-model="pageSize" 
+              class="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+            >
+              <option :value="10">10</option>
+              <option :value="25">25</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+            </select>
+            <span>data per halaman • Menampilkan <strong>{{ paginatedTemplates.length }}</strong> dari <strong>{{ totalItems }}</strong> template</span>
+            <span class="text-slate-300">|</span>
+            <span>Halaman <strong>{{ currentPage }}</strong> dari <strong>{{ totalPages }}</strong></span>
+          </div>
+
+          <div v-if="totalPages > 1" class="flex items-center gap-1">
+            <button 
+              @click="goToPage(currentPage - 1)" 
+              :disabled="currentPage === 1"
+              class="p-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Halaman Sebelumnya"
+            >
+              <ChevronLeft class="w-4 h-4" />
+            </button>
+
+            <template v-for="(p, idx) in displayedPages" :key="idx">
+              <span v-if="p === '...'" class="px-2 py-1 text-slate-400">...</span>
+              <button 
+                v-else 
+                @click="goToPage(p)"
+                :class="[
+                  'px-2.5 py-1 rounded border text-xs font-medium transition-colors',
+                  currentPage === p 
+                    ? 'bg-slate-800 text-white border-slate-800' 
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                ]"
+              >
+                {{ p }}
+              </button>
+            </template>
+
+            <button 
+              @click="goToPage(currentPage + 1)" 
+              :disabled="currentPage === totalPages"
+              class="p-1.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Halaman Berikutnya"
+            >
+              <ChevronRight class="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

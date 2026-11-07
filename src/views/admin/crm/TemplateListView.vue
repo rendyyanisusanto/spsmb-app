@@ -46,7 +46,9 @@ import {
   Tag,
   Copy,
   Send,
-  Info
+  Info,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-vue-next'
 
 const { user, hasRole } = useAuth()
@@ -206,6 +208,35 @@ const resetFilter = () => {
   if (canChooseInstitution.value) {
     queryParams.value.institutionId = ''
   }
+  queryParams.value.page = 1
+  fetchTemplates()
+}
+
+// Pagination Helpers
+const displayedPages = computed(() => {
+  const total = Number(totalPages.value) || 1
+  const current = Number(queryParams.value.page) || 1
+
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total]
+  }
+  if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  }
+  return [1, '...', current - 1, current, current + 1, '...', total]
+})
+
+const goToPage = (p) => {
+  if (typeof p !== 'number') return
+  if (p < 1 || p > totalPages.value || p === queryParams.value.page) return
+  queryParams.value.page = p
+  fetchTemplates()
+}
+
+const handleLimitChange = () => {
   queryParams.value.page = 1
   fetchTemplates()
 }
@@ -517,12 +548,13 @@ onMounted(async () => {
     </div>
 
     <!-- Template Grid Cards -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-      <div
-        v-for="tpl in templates"
-        :key="tpl.id"
-        class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between hover:border-emerald-300 hover:shadow-md transition-all duration-200"
-      >
+    <div v-else class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div
+          v-for="tpl in templates"
+          :key="tpl.id"
+          class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between hover:border-emerald-300 hover:shadow-md transition-all duration-200"
+        >
         <div>
           <!-- Header Badges -->
           <div class="flex items-start justify-between gap-2 mb-3">
@@ -624,6 +656,60 @@ onMounted(async () => {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+      </div>
+
+      <!-- Pagination Footer Bar -->
+      <div v-if="templates.length > 0" class="mt-6 p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+        <div class="flex flex-wrap items-center gap-2">
+          <span>Baris per halaman:</span>
+          <select
+            v-model="queryParams.limit"
+            @change="handleLimitChange"
+            class="px-2 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-emerald-600 font-medium"
+          >
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+          <span class="text-slate-300">|</span>
+          <span>Menampilkan <strong class="text-slate-800">{{ templates.length }}</strong> dari <strong class="text-slate-800">{{ totalItems }}</strong> template</span>
+          <span class="text-slate-300">|</span>
+          <span>Halaman <strong class="text-slate-800">{{ queryParams.page }}</strong> dari <strong class="text-slate-800">{{ totalPages || 1 }}</strong></span>
+        </div>
+
+        <div v-if="totalPages > 1" class="flex items-center gap-1">
+          <button
+            @click="goToPage(queryParams.page - 1)"
+            :disabled="queryParams.page <= 1"
+            title="Halaman Sebelumnya"
+            class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft class="w-4 h-4" />
+          </button>
+          
+          <template v-for="(p, idx) in displayedPages" :key="idx">
+            <span v-if="p === '...'" class="px-2 py-1 text-slate-400 font-medium">...</span>
+            <button
+              v-else
+              @click="goToPage(p)"
+              class="min-w-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors"
+              :class="queryParams.page === p ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
+            >
+              {{ p }}
+            </button>
+          </template>
+
+          <button
+            @click="goToPage(queryParams.page + 1)"
+            :disabled="queryParams.page >= totalPages"
+            title="Halaman Berikutnya"
+            class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight class="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>
